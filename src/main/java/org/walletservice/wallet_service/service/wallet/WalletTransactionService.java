@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,21 @@ public class WalletTransactionService {
         this.walletValidationService = walletValidationService;
     }
 
+    // Helper to get authenticated userId
+    private Long getAuthenticatedUserId() {
+        UsernamePasswordAuthenticationToken auth =
+                (UsernamePasswordAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+        return (Long) auth.getPrincipal();
+    }
+
+    // Helper to check if current user is ADMIN
+    private boolean isAdmin() {
+        UsernamePasswordAuthenticationToken auth =
+                (UsernamePasswordAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public WalletTransactionResponseDTO processTransaction(Long walletId, WalletTransactionRequestDTO request) {
         int attempt = 0;
@@ -51,6 +68,15 @@ public class WalletTransactionService {
                 WalletEntity wallet = walletRepository.findById(walletId)
                         .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
 
+                Long userId = getAuthenticatedUserId();
+                log.info("User {} is attempting a {} of {} on wallet {}", userId, request.type(), request.amount(), walletId);
+
+                // Ownership check
+                if (!wallet.getUserId().equals(userId) && !isAdmin()) {
+                    log.warn("User {} attempted to operate on wallet {} which does not belong to them", userId, walletId);
+                    throw new SecurityException("Forbidden: Wallet does not belong to you");
+                }
+
                 walletValidationService.validateWalletState(wallet);
 
                 TransactionType type = TransactionType.valueOf(request.type().toUpperCase());
@@ -61,17 +87,19 @@ public class WalletTransactionService {
                     walletValidationService.validateBalance(wallet, amount);
                     walletValidationService.validateAndTrackDailyLimit(wallet, amount);
                     wallet.setBalance(wallet.getBalance() - amount);
+                    log.info("Debited {} from wallet {}", amount, walletId);
                 } else {
                     wallet.setBalance(wallet.getBalance() + amount);
+                    log.info("Credited {} to wallet {}", amount, walletId);
                 }
 
                 walletRepository.save(wallet);
 
                 TransactionEntity txn = new TransactionEntity(walletId, type, amount, request.description());
-                txn.setTransactionId(request.transactionId() != null
-                        ? request.transactionId()
-                        : UUID.randomUUID().toString());
+                txn.setTransactionId(request.transactionId() != null ? request.transactionId() : UUID.randomUUID().toString());
                 transactionRepository.save(txn);
+
+                log.info("Transaction {} saved successfully", txn.getTransactionId());
 
                 return new WalletTransactionResponseDTO(
                         txn.getTransactionId(),
@@ -82,9 +110,8 @@ public class WalletTransactionService {
                 );
 
             } catch (ObjectOptimisticLockingFailureException | CannotAcquireLockException ex) {
-                try {
-                    Thread.sleep(BASE_BACKOFF_MS * (1L << (attempt - 1)));
-                } catch (InterruptedException ignored) { }
+                log.warn("Attempt {} failed due to lock. Retrying...", attempt);
+                try { Thread.sleep(BASE_BACKOFF_MS * (1L << (attempt - 1))); } catch (InterruptedException ignored) { }
             }
         }
 
@@ -109,6 +136,15 @@ public class WalletTransactionService {
                 WalletEntity to = walletRepository.findById(toWalletId)
                         .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
 
+                Long userId = getAuthenticatedUserId();
+                log.info("User {} attempting to transfer {} from wallet {} to wallet {}", userId, amount, fromWalletId, toWalletId);
+
+                // Ownership check for sender wallet
+                if (!from.getUserId().equals(userId) && !isAdmin()) {
+                    log.warn("User {} attempted to transfer from wallet {} which does not belong to them", userId, fromWalletId);
+                    throw new SecurityException("Forbidden: Cannot transfer from wallet you do not own");
+                }
+
                 walletValidationService.validateWalletState(from);
                 walletValidationService.validateWalletState(to);
                 walletValidationService.validateBalance(from, amount);
@@ -132,6 +168,8 @@ public class WalletTransactionService {
                 credit.setTransactionId(txnId + "-C");
                 transactionRepository.save(credit);
 
+                log.info("Transfer {} completed successfully", txnId);
+
                 return new WalletTransactionResponseDTO(
                         debit.getTransactionId(),
                         debit.getAmount(),
@@ -139,11 +177,9 @@ public class WalletTransactionService {
                         debit.getTransactionDate(),
                         debit.getDescription());
 
-            } catch (ObjectOptimisticLockingFailureException e) {
-                log.warn("⚠️ Optimistic lock failure during transfer attempt {}. Retrying...", attempt);
-                try {
-                    Thread.sleep(BASE_BACKOFF_MS * (1L << (attempt - 1)));
-                } catch (InterruptedException ignored) { }
+            } catch (ObjectOptimisticLockingFailureException | CannotAcquireLockException e) {
+                log.warn("Attempt {} failed due to lock. Retrying...", attempt);
+                try { Thread.sleep(BASE_BACKOFF_MS * (1L << (attempt - 1))); } catch (InterruptedException ignored) { }
             }
         }
 
@@ -152,6 +188,17 @@ public class WalletTransactionService {
 
     @Transactional(readOnly = true)
     public List<WalletTransactionResponseDTO> listTransactions(Long walletId) {
+        Long userId = getAuthenticatedUserId();
+        WalletEntity wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+        if (!wallet.getUserId().equals(userId) && !isAdmin()) {
+            log.warn("User {} attempted to access transactions of wallet {} which does not belong to them", userId, walletId);
+            throw new SecurityException("Forbidden: Cannot view transactions of this wallet");
+        }
+
+        log.info("User {} listing transactions for wallet {}", userId, walletId);
+
         return transactionRepository.findByWalletId(walletId).stream()
                 .map(tx -> new WalletTransactionResponseDTO(
                         tx.getTransactionId(),
@@ -164,6 +211,11 @@ public class WalletTransactionService {
 
     @Transactional(readOnly = true)
     public List<WalletTransactionResponseDTO> getAllTransactions() {
+        if (!isAdmin()) {
+            log.warn("Non-admin attempted to access all transactions");
+            throw new SecurityException("Forbidden: Only admin can view all transactions");
+        }
+        log.info("Admin fetching all transactions");
         return transactionRepository.findAll().stream()
                 .map(tx -> new WalletTransactionResponseDTO(
                         tx.getTransactionId(),
@@ -173,5 +225,4 @@ public class WalletTransactionService {
                         tx.getDescription()))
                 .collect(Collectors.toList());
     }
-
 }

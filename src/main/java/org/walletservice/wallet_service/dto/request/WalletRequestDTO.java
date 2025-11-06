@@ -3,10 +3,6 @@ package org.walletservice.wallet_service.dto.request;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
-/**
- * DTO used to create a new wallet in the Wallet microservice.
- * The userId will come from the User microservice via REST call or message queue.
- */
 public class WalletRequestDTO {
 
     @NotNull(message = "User ID is required")

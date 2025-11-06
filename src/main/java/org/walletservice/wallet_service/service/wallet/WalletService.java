@@ -19,16 +19,18 @@ public class WalletService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletService.class);
     private final WalletRepository walletRepository;
-    private final WalletValidationService walletValidationService;
 
-    public WalletService(WalletRepository walletRepository,
-                         WalletValidationService walletValidationService) {
+    public WalletService(WalletRepository walletRepository) {
         this.walletRepository = walletRepository;
-        this.walletValidationService = walletValidationService;
     }
 
+    // Create wallet with ownership/admin check
     @Transactional(propagation = Propagation.REQUIRED, isolation = Isolation.READ_COMMITTED)
-    public WalletResponseDTO createWallet(WalletRequestDTO request) {
+    public WalletResponseDTO createWallet(WalletRequestDTO request, Long requesterUserId, boolean isAdmin) {
+        if (!isAdmin && !request.getUserId().equals(requesterUserId)) {
+            throw new IllegalArgumentException("You can only create a wallet for yourself");
+        }
+
         WalletEntity wallet = new WalletEntity(request.getUserId(), request.getBalance());
         WalletEntity saved = walletRepository.save(wallet);
 
@@ -36,25 +38,54 @@ public class WalletService {
         return new WalletResponseDTO(saved.getId(), saved.getUserId(), saved.getBalance());
     }
 
+    // Get wallet details with ownership/admin check
     @Transactional(readOnly = true)
-    public WalletResponseDTO getWalletDetails(Long walletId) {
+    public WalletResponseDTO getWalletDetails(Long walletId, Long requesterUserId, boolean isAdmin) {
         WalletEntity wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
-        walletValidationService.validateWalletState(wallet);
+
+        if (!isAdmin && !wallet.getUserId().equals(requesterUserId)) {
+            throw new IllegalArgumentException("You do not have access to this wallet");
+        }
+
         return new WalletResponseDTO(wallet.getId(), wallet.getUserId(), wallet.getBalance());
     }
 
+    // Get balance with ownership/admin check
+    @Transactional(readOnly = true)
+    public Double getBalance(Long walletId, Long requesterUserId, boolean isAdmin) {
+        WalletEntity wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+        if (!isAdmin && !wallet.getUserId().equals(requesterUserId)) {
+            throw new IllegalArgumentException("You do not have access to this wallet");
+        }
+
+        return wallet.getBalance();
+    }
+
+    // Update balance with ownership/admin check
+    @Transactional
+    public WalletResponseDTO updateBalance(Long walletId, Double newBalance, Long requesterUserId, boolean isAdmin) {
+        WalletEntity wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+        if (!isAdmin && !wallet.getUserId().equals(requesterUserId)) {
+            throw new IllegalArgumentException("You cannot update this wallet");
+        }
+
+        wallet.setBalance(newBalance);
+        WalletEntity saved = walletRepository.save(wallet);
+
+        log.info("💰 Wallet {} balance updated to ₹{}", walletId, newBalance);
+        return new WalletResponseDTO(saved.getId(), saved.getUserId(), saved.getBalance());
+    }
+
+    // Get all wallets (admin only)
     @Transactional(readOnly = true)
     public List<WalletResponseDTO> getAllWallets() {
         return walletRepository.findAll().stream()
                 .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
                 .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public Double getBalance(Long walletId) {
-        return walletRepository.findById(walletId)
-                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"))
-                .getBalance();
     }
 }

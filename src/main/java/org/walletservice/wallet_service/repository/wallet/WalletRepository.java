@@ -20,6 +20,7 @@ public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
     // Find wallets with balance greater than a certain amount
     List<WalletEntity> findByBalanceGreaterThan(Double amount);
 
+
     // Find wallets created before a certain date
     List<WalletEntity> findByCreatedAtBefore(java.time.LocalDateTime date);
 

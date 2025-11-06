@@ -7,25 +7,23 @@ public class ErrorResponseDTO {
     private int status;
     private String error;
     private String message;
-    private Long secondsLeft; // optional — only for frozen wallet case
 
     public ErrorResponseDTO() {}
 
-    public ErrorResponseDTO(LocalDateTime timestamp, int status, String error, String message, Long secondsLeft) {
+    public ErrorResponseDTO(LocalDateTime timestamp, int status, String error, String message) {
         this.timestamp = timestamp;
         this.status = status;
         this.error = error;
         this.message = message;
-        this.secondsLeft = secondsLeft;
     }
 
-    // ✅ Static builder for convenience
+    // Static builder for convenience
     public static ErrorResponseDTO of(int status, String error, String message) {
-        return new ErrorResponseDTO(LocalDateTime.now(), status, error, message,null);
+        return new ErrorResponseDTO(LocalDateTime.now(), status, error, message);
     }
 
     public static ErrorResponseDTO of(int status, String error, String message, Long secondsLeft) {
-        return new ErrorResponseDTO(LocalDateTime.now(), status, error, message, secondsLeft);
+        return new ErrorResponseDTO(LocalDateTime.now(), status, error, message);
     }
 
     // Getters & Setters
@@ -41,6 +39,4 @@ public class ErrorResponseDTO {
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
 
-    public Long getSecondsLeft() { return secondsLeft; }
-    public void setSecondsLeft(Long secondsLeft) { this.secondsLeft = secondsLeft; }
 }
