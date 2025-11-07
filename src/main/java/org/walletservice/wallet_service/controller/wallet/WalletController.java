@@ -94,15 +94,25 @@ public class WalletController {
         return ResponseEntity.ok(updatedWallet);
     }
 
-    @GetMapping("/wallets/user/{userId}")
-    public ResponseEntity<List<WalletResponseDTO>> getWalletsByUser(@PathVariable Long userId) {
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<WalletResponseDTO>> getWalletsByUser(
+            @PathVariable Long userId,
+            HttpServletRequest httpRequest) {
+
+        String token = httpRequest.getHeader("Authorization").substring(7);
+        Long requesterUserId = jwtService.extractUserId(token);
+        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
+
+        if (!isAdmin && !requesterUserId.equals(userId)) {
+            return ResponseEntity.status(403).build(); // forbidden
+        }
+
         List<WalletEntity> wallets = walletRepository.findByUserId(userId);
         List<WalletResponseDTO> dtoList = wallets.stream()
                 .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
                 .toList();
         return ResponseEntity.ok(dtoList);
     }
-
 
     @GetMapping("/admin/all")
     public ResponseEntity<List<WalletResponseDTO>> getAllWallets(HttpServletRequest httpRequest) {
