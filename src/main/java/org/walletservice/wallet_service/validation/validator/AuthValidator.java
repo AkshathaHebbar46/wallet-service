@@ -2,9 +2,14 @@ package org.walletservice.wallet_service.validation.validator;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
+import org.walletservice.wallet_service.entity.wallet.WalletEntity;
+import org.walletservice.wallet_service.exception.UnauthorizedAccessException;
+import org.walletservice.wallet_service.exception.WalletNotFoundException;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
 import org.walletservice.wallet_service.security.AuthContext;
 import org.walletservice.wallet_service.service.jwt.JwtService;
+
+import java.util.Optional;
 
 @Component
 public class AuthValidator {
@@ -37,14 +42,18 @@ public class AuthValidator {
     }
 
     public boolean isAuthorizedForWallet(AuthContext auth, Long walletId) {
-        // Admins can access any wallet
-        if (auth.isAdmin()) {
-            return true;
+        Optional<WalletEntity> walletOpt = walletRepository.findById(walletId);
+
+        if (walletOpt.isEmpty()) {
+            throw new WalletNotFoundException("Wallet with ID " + walletId + " does not exist.");
         }
 
-        // Normal users can only access their own wallets
-        return walletRepository.findById(walletId)
-                .map(wallet -> wallet.getUserId().equals(auth.getUserId()))
-                .orElse(false);
+        WalletEntity wallet = walletOpt.get();
+        if (!wallet.getUserId().equals(auth.getUserId())) {
+            throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
+        }
+
+        return true;
     }
+
 }

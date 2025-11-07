@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.walletservice.wallet_service.exception.UnauthorizedAccessException;
 import org.walletservice.wallet_service.security.AuthContext;
 import org.walletservice.wallet_service.validation.validator.AuthValidator;
 import org.walletservice.wallet_service.dto.request.WalletTransactionRequestDTO;
@@ -48,7 +49,7 @@ public class TransactionController {
 
         AuthContext auth = authValidator.getAuthContext(servletRequest);
         if (!authValidator.isAuthorizedForWallet(auth, walletId)) {
-            return ResponseEntity.status(403).build();
+            throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
         }
 
         log.info("Processing {} transaction for walletId={} amount={}", request.type(), walletId, request.amount());
@@ -64,8 +65,9 @@ public class TransactionController {
 
         AuthContext auth = authValidator.getAuthContext(servletRequest);
         if (!authValidator.isAuthorizedForWallet(auth, request.fromWalletId())) {
-            return ResponseEntity.status(403).build();
+            throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
         }
+
 
         log.info("Initiating transfer: {} → {} | amount={}",
                 request.fromWalletId(), request.toWalletId(), request.amount());
@@ -82,7 +84,7 @@ public class TransactionController {
 
         AuthContext auth = authValidator.getAuthContext(servletRequest);
         if (!authValidator.isAuthorizedForWallet(auth, walletId)) {
-            return ResponseEntity.status(403).build();
+            throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
         }
 
         log.info("Fetching all transactions for walletId={}", walletId);
@@ -105,7 +107,7 @@ public class TransactionController {
 
         AuthContext auth = authValidator.getAuthContext(servletRequest);
         if (!authValidator.isAuthorizedForWallet(auth, walletId)) {
-            return ResponseEntity.status(403).build();
+            throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
         }
 
         log.info("Fetching filtered transaction history for walletId={}", walletId);

@@ -42,6 +42,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = jwtService.extractUserId(token);
                 String role = jwtService.extractRole(token);
 
+                log.info("✅ Authenticated userId={} with role={}", userId, role);
+
                 List<SimpleGrantedAuthority> authorities = List.of(
                         new SimpleGrantedAuthority("ROLE_" + role)
                 );
@@ -49,7 +51,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(userId, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
+            } else {
+                log.warn("❌ Invalid token received");
             }
+
         }
 
         filterChain.doFilter(request, response);
