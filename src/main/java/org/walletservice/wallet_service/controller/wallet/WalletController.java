@@ -10,7 +10,8 @@ import org.walletservice.wallet_service.dto.request.WalletRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
-import org.walletservice.wallet_service.service.jwt.JwtService;
+import org.walletservice.wallet_service.security.AuthContext;
+import org.walletservice.wallet_service.validation.validator.AuthValidator;
 import org.walletservice.wallet_service.service.wallet.WalletService;
 
 import java.util.List;
@@ -20,31 +21,26 @@ import java.util.List;
 public class WalletController {
 
     private static final Logger log = LoggerFactory.getLogger(WalletController.class);
-    private final WalletService walletService;
-    private final JwtService jwtService;
-    private final WalletRepository walletRepository;
 
-    public WalletController(WalletService walletService, JwtService jwtService, WalletRepository walletRepository) {
+    private final WalletService walletService;
+    private final WalletRepository walletRepository;
+    private final AuthValidator authValidator;
+
+    public WalletController(WalletService walletService,
+                            WalletRepository walletRepository,
+                            AuthValidator authValidator) {
         this.walletService = walletService;
-        this.jwtService = jwtService;
         this.walletRepository = walletRepository;
+        this.authValidator = authValidator;
     }
 
     @PostMapping
     public ResponseEntity<WalletResponseDTO> createWallet(
-            @RequestBody @Valid WalletRequestDTO request,
+            @Valid @RequestBody WalletRequestDTO request,
             HttpServletRequest httpRequest) {
 
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        Long requesterUserId = jwtService.extractUserId(token);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
-        WalletResponseDTO wallet = walletService.createWallet(
-                request,
-                requesterUserId,
-                isAdmin
-        );
-
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
+        WalletResponseDTO wallet = walletService.createWallet(request, auth.getUserId(), auth.isAdmin());
         return ResponseEntity.status(201).body(wallet);
     }
 
@@ -53,11 +49,8 @@ public class WalletController {
             @PathVariable Long walletId,
             HttpServletRequest httpRequest) {
 
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        Long requesterUserId = jwtService.extractUserId(token);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
-        WalletResponseDTO wallet = walletService.getWalletDetails(walletId, requesterUserId, isAdmin);
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
+        WalletResponseDTO wallet = walletService.getWalletDetails(walletId, auth.getUserId(), auth.isAdmin());
         return ResponseEntity.ok(wallet);
     }
 
@@ -66,31 +59,24 @@ public class WalletController {
             @PathVariable Long walletId,
             HttpServletRequest httpRequest) {
 
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        Long requesterUserId = jwtService.extractUserId(token);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
-        Double balance = walletService.getBalance(walletId, requesterUserId, isAdmin);
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
+        Double balance = walletService.getBalance(walletId, auth.getUserId(), auth.isAdmin());
         return ResponseEntity.ok(balance);
     }
 
     @PutMapping("/{walletId}/balance")
     public ResponseEntity<WalletResponseDTO> updateBalance(
             @PathVariable Long walletId,
-            @RequestBody @Valid WalletRequestDTO request,
+            @Valid @RequestBody WalletRequestDTO request,
             HttpServletRequest httpRequest) {
 
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        Long requesterUserId = jwtService.extractUserId(token);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
         WalletResponseDTO updatedWallet = walletService.updateBalance(
                 walletId,
                 request.getBalance(),
-                requesterUserId,
-                isAdmin
+                auth.getUserId(),
+                auth.isAdmin()
         );
-
         return ResponseEntity.ok(updatedWallet);
     }
 
@@ -99,31 +85,25 @@ public class WalletController {
             @PathVariable Long userId,
             HttpServletRequest httpRequest) {
 
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        Long requesterUserId = jwtService.extractUserId(token);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
-        if (!isAdmin && !requesterUserId.equals(userId)) {
-            return ResponseEntity.status(403).build(); // forbidden
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
+        if (!authValidator.isAuthorized(auth, userId)) {
+            return ResponseEntity.status(403).build();
         }
 
         List<WalletEntity> wallets = walletRepository.findByUserId(userId);
         List<WalletResponseDTO> dtoList = wallets.stream()
                 .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
                 .toList();
+
         return ResponseEntity.ok(dtoList);
     }
 
     @GetMapping("/admin/all")
     public ResponseEntity<List<WalletResponseDTO>> getAllWallets(HttpServletRequest httpRequest) {
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        boolean isAdmin = "ADMIN".equals(jwtService.extractRole(token));
-
-        if (!isAdmin) {
+        AuthContext auth = authValidator.getAuthContext(httpRequest);
+        if (!auth.isAdmin()) {
             return ResponseEntity.status(403).build();
         }
-
-        List<WalletResponseDTO> wallets = walletService.getAllWallets();
-        return ResponseEntity.ok(wallets);
+        return ResponseEntity.ok(walletService.getAllWallets());
     }
 }
