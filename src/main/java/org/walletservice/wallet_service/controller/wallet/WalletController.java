@@ -97,13 +97,4 @@ public class WalletController {
 
         return ResponseEntity.ok(dtoList);
     }
-
-    @GetMapping("/admin/all")
-    public ResponseEntity<List<WalletResponseDTO>> getAllWallets(HttpServletRequest httpRequest) {
-        AuthContext auth = authValidator.getAuthContext(httpRequest);
-        if (!auth.isAdmin()) {
-            return ResponseEntity.status(403).build();
-        }
-        return ResponseEntity.ok(walletService.getAllWallets());
-    }
 }
