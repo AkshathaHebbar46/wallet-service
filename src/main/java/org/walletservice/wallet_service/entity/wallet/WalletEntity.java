@@ -37,6 +37,17 @@ public class WalletEntity {
     @Column(name = "frozen_at")
     private LocalDateTime frozenAt;
 
+    @Column(name = "active", nullable = false)
+    private Boolean active = true;
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
+    }
+
     // Wallet creation date
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
