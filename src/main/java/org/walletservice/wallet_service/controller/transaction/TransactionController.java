@@ -40,7 +40,9 @@ public class TransactionController {
         this.authValidator = authValidator;
     }
 
-    // 🔒 Process CREDIT or DEBIT
+    // ------------------------
+    // Process CREDIT or DEBIT
+    // ------------------------
     @PostMapping("/{walletId}")
     public ResponseEntity<WalletTransactionResponseDTO> processTransaction(
             @PathVariable Long walletId,
@@ -57,7 +59,9 @@ public class TransactionController {
         return ResponseEntity.status(201).body(response);
     }
 
-    // 🔒 Transfer between wallets
+    // ------------------------
+    // Transfer between wallets
+    // ------------------------
     @PostMapping("/transfer")
     public ResponseEntity<WalletTransactionResponseDTO> transferMoney(
             @Valid @RequestBody WalletTransferRequestDTO request,
@@ -68,7 +72,6 @@ public class TransactionController {
             throw new UnauthorizedAccessException("You are not allowed to access this wallet.");
         }
 
-
         log.info("Initiating transfer: {} → {} | amount={}",
                 request.fromWalletId(), request.toWalletId(), request.amount());
         WalletTransactionResponseDTO response = walletTransactionService.transferMoney(
@@ -76,7 +79,9 @@ public class TransactionController {
         return ResponseEntity.status(201).body(response);
     }
 
-    // 🔒 List all transactions of a wallet
+    // ------------------------
+    // List all transactions of a wallet
+    // ------------------------
     @GetMapping("/{walletId}/list")
     public ResponseEntity<List<WalletTransactionResponseDTO>> listTransactions(
             @PathVariable Long walletId,
@@ -92,7 +97,9 @@ public class TransactionController {
         return ResponseEntity.ok(transactions);
     }
 
-    // 🔒 Paginated & filtered transaction history
+    // ------------------------
+    // Paginated & filtered transaction history
+    // ------------------------
     @GetMapping("/history")
     public ResponseEntity<Page<WalletTransactionResponseDTO>> getTransactionHistory(
             @RequestParam Long walletId,

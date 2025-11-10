@@ -2,8 +2,8 @@ package org.walletservice.wallet_service.service.wallet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class WalletTransactionService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletTransactionService.class);
+    private static final int MAX_RETRY = 3;
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
@@ -50,14 +51,53 @@ public class WalletTransactionService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // ------------------------
+    // Public methods with retry
+    // ------------------------
+
     public WalletTransactionResponseDTO processTransaction(Long walletId, WalletTransactionRequestDTO request) {
+        int attempts = 0;
+        while (attempts < MAX_RETRY) {
+            try {
+                // ✅ Validations outside transaction
+                WalletEntity wallet = validateTransaction(walletId, request);
+
+                // ✅ Transactional processing
+                return processTransactionTransactional(wallet, request);
+
+            } catch (Exception ex) {
+                attempts++;
+                log.warn("Attempt {} failed for wallet {}: {}", attempts, walletId, ex.getMessage());
+                if (attempts >= MAX_RETRY) throw ex;
+            }
+        }
+        throw new IllegalStateException("Unexpected error processing transaction");
+    }
+
+    public WalletTransactionResponseDTO transferMoney(Long fromWalletId, Long toWalletId, Double amount) {
+        int attempts = 0;
+        while (attempts < MAX_RETRY) {
+            try {
+                // ✅ Validations outside transaction
+                WalletEntity[] wallets = validateTransfer(fromWalletId, toWalletId, amount);
+
+                // ✅ Transactional transfer
+                return transferMoneyTransactional(wallets[0], wallets[1], amount);
+
+            } catch (Exception ex) {
+                attempts++;
+                log.warn("Attempt {} failed to transfer from {} to {}: {}", attempts, fromWalletId, toWalletId, ex.getMessage());
+                if (attempts >= MAX_RETRY) throw ex;
+            }
+        }
+        throw new IllegalStateException("Unexpected error during transfer");
+    }
+
+    private WalletEntity validateTransaction(Long walletId, WalletTransactionRequestDTO request) {
         WalletEntity wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
 
         Long userId = getAuthenticatedUserId();
-        log.info("User {} is attempting a {} of {} on wallet {}", userId, request.type(), request.amount(), walletId);
-
         if (!wallet.getUserId().equals(userId) && !isAdmin()) {
             throw new SecurityException("Forbidden: Wallet does not belong to you");
         }
@@ -65,20 +105,54 @@ public class WalletTransactionService {
         walletValidationService.validateWalletState(wallet);
 
         double amount = request.amount();
-        TransactionType type = TransactionType.valueOf(request.type().toUpperCase());
-
         if (amount <= 0) throw new IllegalArgumentException("Amount must be positive.");
 
-        if (type == TransactionType.DEBIT) {
+        if (TransactionType.valueOf(request.type().toUpperCase()) == TransactionType.DEBIT) {
             walletValidationService.validateBalance(wallet, amount);
+        }
+
+        return wallet;
+    }
+
+    private WalletEntity[] validateTransfer(Long fromWalletId, Long toWalletId, Double amount) {
+        if (Objects.equals(fromWalletId, toWalletId))
+            throw new IllegalArgumentException("Cannot transfer to same wallet.");
+        if (amount == null || amount <= 0)
+            throw new IllegalArgumentException("Amount must be positive.");
+
+        WalletEntity from = walletRepository.findById(fromWalletId)
+                .orElseThrow(() -> new IllegalArgumentException("Source wallet not found"));
+        WalletEntity to = walletRepository.findById(toWalletId)
+                .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
+
+        Long userId = getAuthenticatedUserId();
+        if (!from.getUserId().equals(userId) && !isAdmin()) {
+            throw new SecurityException("Forbidden: Cannot transfer from wallet you do not own");
+        }
+
+        walletValidationService.validateWalletState(from);
+        walletValidationService.validateWalletActive(to);
+        walletValidationService.validateBalance(from, amount);
+
+        return new WalletEntity[]{from, to};
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected WalletTransactionResponseDTO processTransactionTransactional(WalletEntity wallet, WalletTransactionRequestDTO request) {
+        double amount = request.amount();
+        TransactionType type = TransactionType.valueOf(request.type().toUpperCase());
+
+        if (type == TransactionType.DEBIT) {
+            // ✅ Update spent & freeze inside transaction
             walletValidationService.updateDailySpentAndFreeze(wallet, amount);
             wallet.setBalance(wallet.getBalance() - amount);
         } else {
             wallet.setBalance(wallet.getBalance() + amount);
-            walletRepository.save(wallet); // only save for CREDIT
         }
 
-        TransactionEntity txn = new TransactionEntity(walletId, type, amount, request.description());
+        walletRepository.save(wallet);
+
+        TransactionEntity txn = new TransactionEntity(wallet.getId(), type, amount, request.description());
         txn.setTransactionId(request.transactionId() != null ? request.transactionId() : UUID.randomUUID().toString());
         transactionRepository.save(txn);
 
@@ -93,57 +167,26 @@ public class WalletTransactionService {
         );
     }
 
-    public void preCheckTransfer(Long fromWalletId, Long toWalletId, Double amount) {
-        if (Objects.equals(fromWalletId, toWalletId))
-            throw new IllegalArgumentException("Cannot transfer to same wallet.");
-        if (amount == null || amount <= 0)
-            throw new IllegalArgumentException("Amount must be positive.");
-
-        Long userId = getAuthenticatedUserId();
-        WalletEntity from = walletRepository.findById(fromWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Source wallet not found"));
-
-        if (!from.getUserId().equals(userId) && !isAdmin()) {
-            throw new SecurityException("Forbidden: Cannot transfer from wallet you do not own");
-        }
-    }
-
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public WalletTransactionResponseDTO transferMoney(Long fromWalletId, Long toWalletId, Double amount) {
-        // Fetch wallets inside transaction
-        WalletEntity from = walletRepository.findById(fromWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Source wallet not found"));
-        WalletEntity to = walletRepository.findById(toWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
-
-        Long userId = getAuthenticatedUserId();
-        log.info("User {} attempting to transfer {} from wallet {} to wallet {}", userId, amount, fromWalletId, toWalletId);
-
-        // All original validation and freeze logic stays here
-        walletValidationService.validateWalletState(from);
-        walletValidationService.validateWalletActive(to);
-        walletValidationService.validateBalance(from, amount);
+    protected WalletTransactionResponseDTO transferMoneyTransactional(WalletEntity from, WalletEntity to, Double amount) {
+        // ✅ Update spent & freeze inside transaction
         walletValidationService.updateDailySpentAndFreeze(from, amount);
 
-        // Update balances
         from.setBalance(from.getBalance() - amount);
         to.setBalance(to.getBalance() + amount);
 
-        // Save wallets
         walletRepository.save(from);
         walletRepository.save(to);
 
-        // Save transactions
         String txnId = UUID.randomUUID().toString();
 
-        TransactionEntity debit = new TransactionEntity(fromWalletId, TransactionType.DEBIT, amount,
-                "Transfer to wallet " + toWalletId);
+        TransactionEntity debit = new TransactionEntity(from.getId(), TransactionType.DEBIT, amount,
+                "Transfer to wallet " + to.getId());
         debit.setTransactionId(txnId + "-D");
         transactionRepository.save(debit);
 
-        TransactionEntity credit = new TransactionEntity(toWalletId, TransactionType.CREDIT, amount,
-                "Transfer from wallet " + fromWalletId);
+        TransactionEntity credit = new TransactionEntity(to.getId(), TransactionType.CREDIT, amount,
+                "Transfer from wallet " + from.getId());
         credit.setTransactionId(txnId + "-C");
         transactionRepository.save(credit);
 
@@ -154,21 +197,9 @@ public class WalletTransactionService {
                 debit.getAmount(),
                 debit.getType().name(),
                 debit.getTransactionDate(),
-                debit.getDescription());
+                debit.getDescription()
+        );
     }
-
-
-    public WalletTransactionResponseDTO transferMoneyWithPreCheck(Long fromWalletId, Long toWalletId, Double amount) {
-        // Lightweight pre-checks (outside transaction)
-        preCheckTransfer(fromWalletId, toWalletId, amount);
-
-        // Full transfer inside transaction (logic completely untouched)
-        return transferMoney(fromWalletId, toWalletId, amount);
-    }
-
-
-
-
 
     @Transactional(readOnly = true)
     public List<WalletTransactionResponseDTO> listTransactions(Long walletId) {
