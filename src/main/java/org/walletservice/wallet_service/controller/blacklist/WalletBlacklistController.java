@@ -1,16 +1,11 @@
 package org.walletservice.wallet_service.controller.blacklist;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.walletservice.wallet_service.service.blacklist.WalletBlacklistService;
+import org.walletservice.wallet_service.service.wallet.WalletBlacklistService;
 
 @RestController
 @RequestMapping("/wallets/blacklist")
 public class WalletBlacklistController {
-
-    private static final Logger log = LoggerFactory.getLogger(WalletBlacklistController.class);
 
     private final WalletBlacklistService walletBlacklistService;
 
@@ -18,24 +13,39 @@ public class WalletBlacklistController {
         this.walletBlacklistService = walletBlacklistService;
     }
 
-    /** Blacklist a single wallet */
-    @PostMapping("/wallet/{walletId}")
-    public ResponseEntity<String> blacklistWallet(@PathVariable Long walletId) {
-        walletBlacklistService.blacklistWallet(walletId);
-        return ResponseEntity.ok("Wallet " + walletId + " has been blacklisted and set to inactive");
-    }
-
-    /** Blacklist all wallets of a user */
+    /**
+     * 🚫 Blacklist all wallets of a user
+     * Called by user-service when admin blocks a user
+     */
     @PostMapping("/user/{userId}")
-    public ResponseEntity<String> blacklistUser(@PathVariable Long userId) {
-        walletBlacklistService.blacklistUser(userId);
-        return ResponseEntity.ok("All wallets of user " + userId + " have been blacklisted and set to inactive");
+    public void blacklistUserWallets(@PathVariable Long userId) {
+        walletBlacklistService.blacklistUserWallets(userId);
     }
 
-    /** Blacklist wallet AND its user */
-    @PostMapping("/wallet-and-user/{walletId}")
-    public ResponseEntity<String> blacklistWalletAndUser(@PathVariable Long walletId) {
-        walletBlacklistService.blacklistWalletAndUser(walletId);
-        return ResponseEntity.ok("Wallet " + walletId + " and all wallets of the user have been blacklisted");
+    /**
+     * ♻️ Unblock all wallets of a user
+     * Called by user-service when admin unblocks a user
+     */
+    @PostMapping("/user/{userId}/unblock")
+    public void unblockUserWallets(@PathVariable Long userId) {
+        walletBlacklistService.unblockUserWallets(userId);
+    }
+
+    /**
+     * 🚫 Blacklist a specific wallet
+     * Called by user-service for admin-level wallet block
+     */
+    @PostMapping("/wallet/{walletId}")
+    public void blacklistWallet(@PathVariable Long walletId) {
+        walletBlacklistService.blacklistWallet(walletId);
+    }
+
+    /**
+     * ♻️ Unblock a specific wallet
+     * Called by user-service for admin-level wallet unblock
+     */
+    @PostMapping("/wallet/{walletId}/unblock")
+    public void unblockWallet(@PathVariable Long walletId) {
+        walletBlacklistService.unblockWallet(walletId);
     }
 }

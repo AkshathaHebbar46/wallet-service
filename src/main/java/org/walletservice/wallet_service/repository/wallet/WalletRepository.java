@@ -17,6 +17,9 @@ public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
     List<WalletEntity> findByUserId(Long userId);
     boolean existsByUserId(Long userId);
 
+    List<WalletEntity> findAllByUserId(Long userId);
+
+
     // Find wallets with balance greater than a certain amount
     List<WalletEntity> findByBalanceGreaterThan(Double amount);
 
