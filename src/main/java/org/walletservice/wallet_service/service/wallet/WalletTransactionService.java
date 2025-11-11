@@ -51,9 +51,6 @@ public class WalletTransactionService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
-    // ------------------------
-    // Public methods with retry
-    // ------------------------
 
     public WalletTransactionResponseDTO processTransaction(Long walletId, WalletTransactionRequestDTO request) {
         int attempts = 0;
@@ -78,10 +75,9 @@ public class WalletTransactionService {
         int attempts = 0;
         while (attempts < MAX_RETRY) {
             try {
-                // ✅ Validations outside transaction
                 WalletEntity[] wallets = validateTransfer(fromWalletId, toWalletId, amount);
 
-                // ✅ Transactional transfer
+                // 👉 Calls another method that runs inside a transaction
                 return transferMoneyTransactional(wallets[0], wallets[1], amount);
 
             } catch (Exception ex) {
@@ -169,7 +165,7 @@ public class WalletTransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     protected WalletTransactionResponseDTO transferMoneyTransactional(WalletEntity from, WalletEntity to, Double amount) {
-        // ✅ Update spent & freeze inside transaction
+        // Update spent & freeze inside transaction
         walletValidationService.updateDailySpentAndFreeze(from, amount);
 
         from.setBalance(from.getBalance() - amount);

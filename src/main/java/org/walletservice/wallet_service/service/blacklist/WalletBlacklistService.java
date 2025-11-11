@@ -20,9 +20,6 @@ public class WalletBlacklistService {
         this.walletRepository = walletRepository;
     }
 
-    /**
-     * Blacklist a single wallet → sets inactive and logs.
-     */
     @Transactional
     public void blacklistWallet(Long walletId) {
         WalletEntity wallet = walletRepository.findById(walletId)
@@ -31,12 +28,9 @@ public class WalletBlacklistService {
         wallet.setActive(false);
         walletRepository.save(wallet);
 
-        log.info("Wallet {} has been blacklisted and set to inactive", walletId);
+        log.info("Wallet {} has been blacklisted and set inactive", walletId);
     }
 
-    /**
-     * Blacklist all wallets of a user → sets inactive
-     */
     @Transactional
     public void blacklistUser(Long userId) {
         List<WalletEntity> wallets = walletRepository.findByUserId(userId);
@@ -51,20 +45,17 @@ public class WalletBlacklistService {
         }
 
         walletRepository.saveAll(wallets);
-        log.info("All wallets of user {} have been blacklisted and set to inactive", userId);
+        log.info("All wallets of user {} have been blacklisted", userId);
     }
 
-    /**
-     * Blacklist a wallet and automatically blacklist the user as well
-     */
     @Transactional
     public void blacklistWalletAndUser(Long walletId) {
         WalletEntity wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
 
         Long userId = wallet.getUserId();
-        blacklistWallet(walletId);   // sets this wallet inactive
-        blacklistUser(userId);       // sets all user's wallets inactive
+        blacklistWallet(walletId);
+        blacklistUser(userId);
 
         log.info("Wallet {} and all wallets of user {} have been blacklisted", walletId, userId);
     }
