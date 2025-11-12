@@ -4,9 +4,6 @@ import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
-/**
- * Represents a single wallet transaction (credit or debit).
- */
 @Entity
 @Table(
         name = "transactions",
@@ -20,7 +17,6 @@ public class TransactionEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ✅ Store wallet ID (no @ManyToOne — we are in microservice context)
     @Column(name = "wallet_id", nullable = false)
     private Long walletId;
 

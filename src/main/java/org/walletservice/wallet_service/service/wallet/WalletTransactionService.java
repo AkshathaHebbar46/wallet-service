@@ -17,6 +17,7 @@ import org.walletservice.wallet_service.repository.wallet.WalletRepository;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -53,6 +54,19 @@ public class WalletTransactionService {
 
 
     public WalletTransactionResponseDTO processTransaction(Long walletId, WalletTransactionRequestDTO request) {
+        // 0️⃣ Idempotency check before any transaction
+        Optional<TransactionEntity> existing = transactionRepository.findByTransactionId(request.transactionId());
+        if (existing.isPresent()) {
+            TransactionEntity txn = existing.get();
+            log.info("Idempotent request detected for transactionId={}", request.transactionId());
+            return new WalletTransactionResponseDTO(
+                    txn.getTransactionId(),
+                    txn.getAmount(),
+                    txn.getType().name(),
+                    txn.getTransactionDate(),
+                    txn.getDescription()
+            );
+        }
         int attempts = 0;
         while (attempts < MAX_RETRY) {
             try {
@@ -77,7 +91,7 @@ public class WalletTransactionService {
             try {
                 WalletEntity[] wallets = validateTransfer(fromWalletId, toWalletId, amount);
 
-                // 👉 Calls another method that runs inside a transaction
+                // Calls another method that runs inside a transaction
                 return transferMoneyTransactional(wallets[0], wallets[1], amount);
 
             } catch (Exception ex) {
