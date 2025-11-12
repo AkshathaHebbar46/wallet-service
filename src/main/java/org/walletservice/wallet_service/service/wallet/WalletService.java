@@ -88,4 +88,11 @@ public class WalletService {
                 .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
                 .collect(Collectors.toList());
     }
+
+    @Transactional(readOnly = true)
+    public List<WalletResponseDTO> getWalletsByUser(Long userId) {
+        return walletRepository.findByUserId(userId).stream()
+                .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
+                .collect(Collectors.toList());
+    }
 }

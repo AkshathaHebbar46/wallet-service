@@ -80,21 +80,17 @@ public class WalletController {
         return ResponseEntity.ok(updatedWallet);
     }
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<WalletResponseDTO>> getWalletsByUser(
-            @PathVariable Long userId,
-            HttpServletRequest httpRequest) {
-
+    @GetMapping("/all")
+    public ResponseEntity<List<WalletResponseDTO>> getWalletsForCurrentUser(HttpServletRequest httpRequest) {
         AuthContext auth = authValidator.getAuthContext(httpRequest);
-        if (!authValidator.isAuthorized(auth, userId)) {
-            return ResponseEntity.status(403).build();
+
+        if (auth.isAdmin()) {
+            // Admins can see all wallets
+            return ResponseEntity.ok(walletService.getAllWallets());
         }
 
-        List<WalletEntity> wallets = walletRepository.findByUserId(userId);
-        List<WalletResponseDTO> dtoList = wallets.stream()
-                .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
-                .toList();
-
-        return ResponseEntity.ok(dtoList);
+        // Normal users see only their own wallets
+        List<WalletResponseDTO> wallets = walletService.getWalletsByUser(auth.getUserId());
+        return ResponseEntity.ok(wallets);
     }
 }

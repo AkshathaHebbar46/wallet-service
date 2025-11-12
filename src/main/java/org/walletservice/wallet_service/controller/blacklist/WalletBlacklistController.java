@@ -3,8 +3,10 @@ package org.walletservice.wallet_service.controller.blacklist;
 import org.springframework.web.bind.annotation.*;
 import org.walletservice.wallet_service.service.wallet.WalletBlacklistService;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/wallets/blacklist")
+@RequestMapping("/admin/wallets/blacklist")
 public class WalletBlacklistController {
 
     private final WalletBlacklistService walletBlacklistService;
@@ -13,21 +15,15 @@ public class WalletBlacklistController {
         this.walletBlacklistService = walletBlacklistService;
     }
 
-    /**
-     * 🚫 Blacklist all wallets of a user
-     * Called by user-service when admin blocks a user
-     */
-    @PostMapping("/user/{userId}")
-    public void blacklistUserWallets(@PathVariable Long userId) {
+    @PostMapping
+    public void blacklistWalletsByUser(@RequestBody Map<String, Long> request) {
+        Long userId = request.get("userId");
         walletBlacklistService.blacklistUserWallets(userId);
     }
 
-    /**
-     * ♻️ Unblock all wallets of a user
-     * Called by user-service when admin unblocks a user
-     */
-    @PostMapping("/user/{userId}/unblock")
-    public void unblockUserWallets(@PathVariable Long userId) {
+    @PostMapping("/unblock")
+    public void unblockWalletsByUser(@RequestBody Map<String, Long> request) {
+        Long userId = request.get("userId");
         walletBlacklistService.unblockUserWallets(userId);
     }
 

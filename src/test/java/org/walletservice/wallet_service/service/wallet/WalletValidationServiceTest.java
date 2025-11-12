@@ -63,7 +63,7 @@ class WalletValidationServiceTest {
     void testValidateAndTrackDailyLimit_Valid() {
         wallet.setDailySpent(10000.0);
 
-        walletValidationService.validateAndTrackDailyLimit(wallet, 2000.0);
+        walletValidationService.updateDailySpentAndFreeze(wallet, 2000.0);
 
         verify(walletRepository).saveAndFlush(wallet);
         assertEquals(12000.0, wallet.getDailySpent());
@@ -75,7 +75,7 @@ class WalletValidationServiceTest {
         wallet.setDailySpent(49000.0);
 
         IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> walletValidationService.validateAndTrackDailyLimit(wallet, 2000.0));
+                () -> walletValidationService.updateDailySpentAndFreeze(wallet, 2000.0));
 
         assertTrue(ex.getMessage().contains("Daily limit exceeded"));
         verify(walletRepository, never()).saveAndFlush(any());
@@ -89,7 +89,7 @@ class WalletValidationServiceTest {
         // Simulate a transaction context
             TransactionSynchronizationManager.initSynchronization();
 
-        walletValidationService.validateAndTrackDailyLimit(wallet, 1000.0);
+        walletValidationService.updateDailySpentAndFreeze(wallet, 1000.0);
 
         verify(walletRepository).saveAndFlush(wallet);
 
