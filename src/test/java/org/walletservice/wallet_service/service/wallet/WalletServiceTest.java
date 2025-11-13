@@ -32,7 +32,7 @@ class WalletServiceTest {
     void testCreateWallet_AdminSuccess() {
         WalletRequestDTO request = new WalletRequestDTO();
         request.setUserId(10L);
-        request.setInitialBalance(500.0);
+        request.setBalance(500.0);
 
         WalletEntity savedEntity = new WalletEntity(10L, 500.0);
         savedEntity.setId(1L);
@@ -54,7 +54,7 @@ class WalletServiceTest {
     void testCreateWallet_NonAdminUnauthorized() {
         WalletRequestDTO request = new WalletRequestDTO();
         request.setUserId(2L);
-        request.setInitialBalance(100.0);
+        request.setBalance(100.0);
 
         Exception ex = assertThrows(IllegalArgumentException.class, () ->
                 walletService.createWallet(request, 1L, false)

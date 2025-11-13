@@ -19,9 +19,6 @@ class TransactionRepositoryTest {
     @Mock
     private TransactionRepository transactionRepository;
 
-    @InjectMocks
-    private TransactionRepositoryTestWrapper testWrapper; // Fake service wrapper for testing
-
     private TransactionEntity txn1;
     private TransactionEntity txn2;
 
@@ -128,7 +125,8 @@ class TransactionRepositoryTest {
         when(transactionRepository.findByWalletIdAndType(1L, TransactionType.CREDIT, pageable))
                 .thenReturn(page);
 
-        Page<TransactionEntity> result = transactionRepository.findByWalletIdAndType(1L, TransactionType.CREDIT, pageable);
+        Page<TransactionEntity> result =
+                transactionRepository.findByWalletIdAndType(1L, TransactionType.CREDIT, pageable);
 
         assertEquals(1, result.getContent().size());
         assertEquals(TransactionType.CREDIT, result.getContent().get(0).getType());
@@ -142,11 +140,14 @@ class TransactionRepositoryTest {
         LocalDateTime end = LocalDateTime.now();
 
         Page<TransactionEntity> page = new PageImpl<>(List.of(txn2));
-        when(transactionRepository.findByWalletIdAndTypeAndTransactionDateBetween(1L, TransactionType.DEBIT, start, end, pageable))
+
+        when(transactionRepository.findByWalletIdAndTypeAndTransactionDateBetween(
+                1L, TransactionType.DEBIT, start, end, pageable))
                 .thenReturn(page);
 
         Page<TransactionEntity> result =
-                transactionRepository.findByWalletIdAndTypeAndTransactionDateBetween(1L, TransactionType.DEBIT, start, end, pageable);
+                transactionRepository.findByWalletIdAndTypeAndTransactionDateBetween(
+                        1L, TransactionType.DEBIT, start, end, pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals(TransactionType.DEBIT, result.getContent().get(0).getType());
@@ -161,16 +162,5 @@ class TransactionRepositoryTest {
         Optional<TransactionEntity> result = transactionRepository.findByTransactionId("INVALID");
 
         assertFalse(result.isPresent());
-    }
-}
-
-/**
- * Dummy wrapper — only needed to satisfy @InjectMocks requirement.
- */
-class TransactionRepositoryTestWrapper {
-    private final TransactionRepository transactionRepository;
-
-    TransactionRepositoryTestWrapper(TransactionRepository transactionRepository) {
-        this.transactionRepository = transactionRepository;
     }
 }

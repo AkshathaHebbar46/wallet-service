@@ -1,56 +1,65 @@
 package org.walletservice.wallet_service.service.jwt;
 
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.walletservice.wallet_service.util.JwtUtil;
 
-import java.security.Key;
-import java.util.Date;
-
+/**
+ * Service to handle JWT operations using JwtUtil:
+ * - validation
+ * - extraction of claims like email, userId, and role
+ */
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret}")
-    private String secret;
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
-    private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
+    private final JwtUtil jwtUtil;
+
+    public JwtService(JwtUtil jwtUtil) {
+        this.jwtUtil = jwtUtil;
     }
 
-    // Validate token (throws if invalid)
+    /**
+     * Validates the token.
+     * @param token JWT string
+     * @return true if valid, false if invalid
+     */
     public boolean isTokenValid(String token) {
-        try {
-            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
+        boolean valid = jwtUtil.validateToken(token);
+        if (valid) {
+            log.debug("✅ Token is valid");
+        } else {
+            log.warn("❌ Invalid JWT token");
         }
+        return valid;
     }
 
-    // Extract email (subject)
+    /**
+     * Extracts email (subject) from JWT token.
+     */
     public String extractEmail(String token) {
-        return extractAllClaims(token).getSubject();
+        String email = jwtUtil.extractUsername(token);
+        log.debug("Extracted email from token: {}", email);
+        return email;
     }
 
-    // Extract userId from claims
+    /**
+     * Extracts userId from JWT claims.
+     */
     public Long extractUserId(String token) {
-        Object id = extractAllClaims(token).get("userId");
-        if (id instanceof Integer) return ((Integer) id).longValue();
-        if (id instanceof Long) return (Long) id;
-        return null;
+        Long userId = jwtUtil.extractUserId(token);
+        log.debug("Extracted userId from token: {}", userId);
+        return userId;
     }
 
-    // Extract single role (for backward compatibility)
+    /**
+     * Extracts role from JWT claims.
+     */
     public String extractRole(String token) {
-        return (String) extractAllClaims(token).get("role");
-    }
-
-    private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        String role = jwtUtil.extractRole(token);
+        log.debug("Extracted role from token: {}", role);
+        return role;
     }
 }

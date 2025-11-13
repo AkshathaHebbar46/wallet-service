@@ -12,13 +12,16 @@ import org.walletservice.wallet_service.repository.wallet.WalletRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+/**
+ * Service to validate wallet state, balance, daily limits, and handle freezing/unfreezing logic.
+ */
 @Service
 public class WalletValidationService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletValidationService.class);
 
-    private static final double DAILY_LIMIT = 50000.0; // daily transaction limit
-    private static final long FREEZE_DURATION_MINUTES = 2; // freeze duration
+    private static final double DAILY_LIMIT = 50000.0; // Daily transaction limit
+    private static final long FREEZE_DURATION_MINUTES = 2; // Freeze duration after wallet reaches limit
 
     private final WalletRepository walletRepository;
     private final WalletFreezeService walletFreezeService;
@@ -30,21 +33,24 @@ public class WalletValidationService {
     }
 
     /**
-     * Validates wallet state (frozen or not) and unfreezes if freeze duration passed.
+     * Validates the wallet state (frozen or active) and automatically unfreezes
+     * it if the freeze duration has elapsed.
      */
     public void validateWalletState(WalletEntity wallet) {
+        // Reset daily spent if it's a new day
         wallet.resetDailyIfNewDay();
 
         if (Boolean.TRUE.equals(wallet.getFrozen()) && wallet.getFrozenAt() != null) {
             long elapsed = Duration.between(wallet.getFrozenAt(), LocalDateTime.now()).toMinutes();
             if (elapsed >= FREEZE_DURATION_MINUTES) {
                 walletFreezeService.unfreezeWallet(wallet);
-                log.info("🧊 Wallet {} unfrozen after {} minutes", wallet.getId(), FREEZE_DURATION_MINUTES);
+                log.info("🧊 Wallet {} automatically unfrozen after {} minutes", wallet.getId(), FREEZE_DURATION_MINUTES);
             } else {
                 long secondsLeft = FREEZE_DURATION_MINUTES * 60 -
                         Duration.between(wallet.getFrozenAt(), LocalDateTime.now()).toSeconds();
+                log.warn("🚫 Wallet {} is currently frozen. {} seconds remaining", wallet.getId(), secondsLeft);
                 throw new WalletFrozenException(
-                        "🚫 Wallet is frozen. Try again in " + secondsLeft + " seconds.",
+                        "Wallet is frozen. Try again in " + secondsLeft + " seconds.",
                         secondsLeft
                 );
             }
@@ -52,16 +58,17 @@ public class WalletValidationService {
     }
 
     /**
-     * Validates if wallet has sufficient balance.
+     * Validates that the wallet has sufficient balance for a debit transaction.
      */
     public void validateBalance(WalletEntity wallet, double amount) {
         if (wallet.getBalance() < amount) {
+            log.warn("❌ Wallet {} insufficient balance: required {}, available {}", wallet.getId(), amount, wallet.getBalance());
             throw new IllegalArgumentException("Insufficient balance.");
         }
     }
 
     /**
-     * Updates daily spent amount and freezes wallet if daily limit reached.
+     * Updates the daily spent amount and freezes the wallet if daily limit is reached.
      */
     public void updateDailySpentAndFreeze(WalletEntity wallet, double amount) {
         wallet.resetDailyIfNewDay();
@@ -69,13 +76,15 @@ public class WalletValidationService {
 
         if (newTotal > DAILY_LIMIT) {
             double available = DAILY_LIMIT - wallet.getDailySpent();
-            throw new IllegalStateException("🚫 Daily limit exceeded. Available ₹" + available);
+            log.warn("🚫 Wallet {} daily limit exceeded. Available amount ₹{}", wallet.getId(), available);
+            throw new IllegalStateException("Daily limit exceeded. Available ₹" + available);
         }
 
         wallet.setDailySpent(newTotal);
-        walletRepository.saveAndFlush(wallet); // persist daily spent
+        walletRepository.saveAndFlush(wallet); // persist daily spent immediately
+        log.info("💵 Wallet {} daily spent updated: ₹{} / ₹{}", wallet.getId(), newTotal, DAILY_LIMIT);
 
-        // If daily limit exactly reached, freeze wallet after commit
+        // Freeze wallet if daily limit is reached
         if (wallet.getDailySpent() >= DAILY_LIMIT) {
             if (TransactionSynchronizationManager.isSynchronizationActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -86,20 +95,22 @@ public class WalletValidationService {
                     }
                 });
             } else {
-                log.warn("Transaction synchronization not active. Freezing wallet immediately.");
+                log.warn("Transaction synchronization not active. Freezing wallet {} immediately.", wallet.getId());
                 walletFreezeService.freezeWallet(wallet);
             }
         }
     }
 
     /**
-     * Validates if wallet exists and is active.
+     * Validates that the wallet exists and is active.
      */
     public void validateWalletActive(WalletEntity wallet) {
         if (wallet == null) {
+            log.warn("❌ Wallet not found");
             throw new IllegalArgumentException("Wallet not found");
         }
         if (Boolean.FALSE.equals(wallet.getActive())) {
+            log.warn("❌ Wallet {} is inactive", wallet.getId());
             throw new IllegalStateException("Wallet is inactive");
         }
     }

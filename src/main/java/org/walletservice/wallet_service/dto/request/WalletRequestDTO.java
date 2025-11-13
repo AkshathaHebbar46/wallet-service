@@ -30,8 +30,8 @@ public class WalletRequestDTO {
         return balance;
     }
 
-    public void setInitialBalance(Double initialBalance) {
-        this.balance = initialBalance;
+    public void setBalance(Double balance) {
+        this.balance = balance;
     }
 
     @Override

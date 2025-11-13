@@ -1,5 +1,7 @@
 package org.walletservice.wallet_service.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,9 +12,12 @@ import org.walletservice.wallet_service.dto.response.ErrorResponseDTO;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     // Handle unauthorized wallet access
     @ExceptionHandler(UnauthorizedAccessException.class)
     public ResponseEntity<ErrorResponseDTO> handleUnauthorizedAccess(UnauthorizedAccessException ex) {
+        log.warn("Unauthorized access attempt: {}", ex.getMessage());
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.FORBIDDEN.value(),
                 "Forbidden",
@@ -24,6 +29,7 @@ public class GlobalExceptionHandler {
     // Wallet frozen
     @ExceptionHandler(WalletFrozenException.class)
     public ResponseEntity<ErrorResponseDTO> handleWalletFrozen(WalletFrozenException ex) {
+        log.warn("Wallet frozen: {} seconds left", ex.getSecondsLeft());
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.LOCKED.value(),
                 "Wallet Frozen",
@@ -36,6 +42,7 @@ public class GlobalExceptionHandler {
     // Illegal or invalid state
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponseDTO> handleIllegalState(IllegalStateException ex) {
+        log.error("Illegal operation attempted: {}", ex.getMessage());
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.CONFLICT.value(),
                 "Operation Not Allowed",
@@ -47,6 +54,7 @@ public class GlobalExceptionHandler {
     // Bad request (invalid args)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponseDTO> handleBadRequest(IllegalArgumentException ex) {
+        log.error("Bad request: {}", ex.getMessage());
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.BAD_REQUEST.value(),
                 "Bad Request",
@@ -59,6 +67,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponseDTO> handleValidationExceptions(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+        log.warn("Validation failed: {}", message);
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.BAD_REQUEST.value(),
                 "Validation Failed",
@@ -67,9 +76,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    // Fallback
+    // Fallback for unexpected exceptions
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> handleGeneric(Exception ex) {
+        log.error("Unexpected exception: ", ex);
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
@@ -78,8 +88,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
+    // Wallet not found
     @ExceptionHandler(WalletNotFoundException.class)
     public ResponseEntity<ErrorResponseDTO> handleWalletNotFound(WalletNotFoundException ex) {
+        log.warn("Wallet not found: {}", ex.getMessage());
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.NOT_FOUND.value(),
                 "Wallet Not Found",

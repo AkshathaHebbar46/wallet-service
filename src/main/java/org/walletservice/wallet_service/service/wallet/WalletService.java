@@ -9,7 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.walletservice.wallet_service.dto.request.WalletRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
+import org.walletservice.wallet_service.exception.WalletNotFoundException;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.security.AuthContext;
+import org.walletservice.wallet_service.validation.validator.AuthValidator;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,9 +22,11 @@ public class WalletService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletService.class);
     private final WalletRepository walletRepository;
+    private final AuthValidator authValidator;
 
-    public WalletService(WalletRepository walletRepository) {
+    public WalletService(WalletRepository walletRepository,AuthValidator authValidator ) {
         this.walletRepository = walletRepository;
+        this.authValidator = authValidator;
     }
 
     // Create wallet with ownership/admin check
@@ -38,18 +43,19 @@ public class WalletService {
         return new WalletResponseDTO(saved.getId(), saved.getUserId(), saved.getBalance());
     }
 
-    // Get wallet details with ownership/admin check
-    @Transactional(readOnly = true)
+    @Transactional
     public WalletResponseDTO getWalletDetails(Long walletId, Long requesterUserId, boolean isAdmin) {
-        WalletEntity wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+        WalletEntity wallet = getWalletById(walletId);
 
+        // Ownership/admin check
         if (!isAdmin && !wallet.getUserId().equals(requesterUserId)) {
-            throw new IllegalArgumentException("You do not have access to this wallet");
+            throw new IllegalArgumentException("You cannot access this wallet");
         }
 
         return new WalletResponseDTO(wallet.getId(), wallet.getUserId(), wallet.getBalance());
     }
+
+
 
     // Get balance with ownership/admin check
     @Transactional(readOnly = true)
@@ -95,4 +101,12 @@ public class WalletService {
                 .map(w -> new WalletResponseDTO(w.getId(), w.getUserId(), w.getBalance()))
                 .collect(Collectors.toList());
     }
+    public WalletEntity getWalletById(Long walletId) {
+        return walletRepository.findById(walletId)
+                .orElseThrow(() -> {
+                    log.warn("❌ Wallet not found by getWalletById: {}", walletId);
+                    return new WalletNotFoundException("Wallet not found with id: " + walletId);
+                });
+    }
+
 }

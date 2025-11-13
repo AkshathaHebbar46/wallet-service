@@ -20,7 +20,6 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-
     private final JwtService jwtService;
 
     public JwtAuthenticationFilter(JwtService jwtService) {
@@ -34,6 +33,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
+        log.info("Authorization header: {}", authHeader);
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
@@ -42,19 +42,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = jwtService.extractUserId(token);
                 String role = jwtService.extractRole(token);
 
-                log.info("✅ Authenticated userId={} with role={}", userId, role);
+                log.info("Authenticated userId={} role={}", userId, role);
 
-                List<SimpleGrantedAuthority> authorities = List.of(
-                        new SimpleGrantedAuthority("ROLE_" + role.toUpperCase())
-                );
+                if (role != null && !role.isBlank()) {
+                    List<SimpleGrantedAuthority> authorities = List.of(
+                            new SimpleGrantedAuthority("ROLE_" + role.toUpperCase())
+                    );
 
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(userId, null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else {
+                    log.warn("JWT token has no role, cannot authenticate");
+                }
+
             } else {
-                log.warn("❌ Invalid token received");
+                log.warn("Invalid JWT token");
             }
-
+        } else {
+            log.warn("Missing or malformed Authorization header");
         }
 
         filterChain.doFilter(request, response);
