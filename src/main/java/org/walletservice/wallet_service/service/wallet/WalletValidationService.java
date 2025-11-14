@@ -114,4 +114,10 @@ public class WalletValidationService {
             throw new IllegalStateException("Wallet is inactive");
         }
     }
+
+    public double getRemainingDailyLimit(WalletEntity wallet) {
+        wallet.resetDailyIfNewDay(); // ensure dailySpent is up-to-date
+        return DAILY_LIMIT - wallet.getDailySpent();
+    }
+
 }

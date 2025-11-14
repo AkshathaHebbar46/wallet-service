@@ -36,6 +36,8 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
 
     Page<TransactionEntity> findByWalletIdAndType(Long walletId, TransactionType type, Pageable pageable);
 
+    Page<TransactionEntity> findByWalletIdIn(List<Long> walletIds, Pageable pageable);
+
     Page<TransactionEntity> findByWalletIdAndTypeAndTransactionDateBetween(
             Long walletId,
             TransactionType type,

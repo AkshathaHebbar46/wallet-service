@@ -30,13 +30,16 @@ public class WalletTransactionService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final WalletValidationService walletValidationService;
+    private final WalletInternalValidationService walletInternalValidationService;
 
     public WalletTransactionService(WalletRepository walletRepository,
                                     TransactionRepository transactionRepository,
-                                    WalletValidationService walletValidationService) {
+                                    WalletValidationService walletValidationService,
+                                    WalletInternalValidationService walletInternalValidationService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.walletValidationService = walletValidationService;
+        this.walletInternalValidationService = walletInternalValidationService;
     }
 
     private Long getAuthenticatedUserId() {
@@ -59,12 +62,19 @@ public class WalletTransactionService {
         if (existing.isPresent()) {
             TransactionEntity txn = existing.get();
             log.info("Idempotent request detected for transactionId={}", request.transactionId());
+            // Fetch the wallet to get current balance and daily limit
+            WalletEntity wallet = walletRepository.findById(walletId)
+                    .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+            double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
             return new WalletTransactionResponseDTO(
                     txn.getTransactionId(),
                     txn.getAmount(),
                     txn.getType().name(),
                     txn.getTransactionDate(),
-                    txn.getDescription()
+                    txn.getDescription(),
+                    wallet.getBalance(),
+                    availableDailyLimit
             );
         }
         int attempts = 0;
@@ -130,10 +140,9 @@ public class WalletTransactionService {
         if (amount == null || amount <= 0)
             throw new IllegalArgumentException("Amount must be positive.");
 
+        // Validate source wallet (user-owned)
         WalletEntity from = walletRepository.findById(fromWalletId)
                 .orElseThrow(() -> new IllegalArgumentException("Source wallet not found"));
-        WalletEntity to = walletRepository.findById(toWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
 
         Long userId = getAuthenticatedUserId();
         if (!from.getUserId().equals(userId) && !isAdmin()) {
@@ -141,11 +150,19 @@ public class WalletTransactionService {
         }
 
         walletValidationService.validateWalletState(from);
-        walletValidationService.validateWalletActive(to);
         walletValidationService.validateBalance(from, amount);
+
+        // Destination wallet: only fetch, no user-level validation
+        WalletEntity to = walletRepository.findById(toWalletId)
+                .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
+
+        // Internal server validation (system token or internal method)
+        // Example: calling WalletInternalValidationService
+        walletInternalValidationService.validateReceiverWallet(toWalletId);
 
         return new WalletEntity[]{from, to};
     }
+
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     protected WalletTransactionResponseDTO processTransactionTransactional(WalletEntity wallet, WalletTransactionRequestDTO request) {
@@ -166,6 +183,8 @@ public class WalletTransactionService {
         txn.setTransactionId(request.transactionId() != null ? request.transactionId() : UUID.randomUUID().toString());
         transactionRepository.save(txn);
 
+        double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+
         log.info("Transaction {} completed", txn.getTransactionId());
 
         return new WalletTransactionResponseDTO(
@@ -173,7 +192,9 @@ public class WalletTransactionService {
                 txn.getAmount(),
                 type.name(),
                 txn.getTransactionDate(),
-                txn.getDescription()
+                txn.getDescription(),
+                wallet.getBalance(),
+                availableDailyLimit
         );
     }
 
@@ -202,12 +223,16 @@ public class WalletTransactionService {
 
         log.info("Transfer {} completed successfully", txnId);
 
+        double availableDailyLimit = walletValidationService.getRemainingDailyLimit(from);
+
         return new WalletTransactionResponseDTO(
                 debit.getTransactionId(),
                 debit.getAmount(),
                 debit.getType().name(),
                 debit.getTransactionDate(),
-                debit.getDescription()
+                debit.getDescription(),
+                from.getBalance(),
+                availableDailyLimit
         );
     }
 
@@ -220,6 +245,7 @@ public class WalletTransactionService {
         if (!wallet.getUserId().equals(userId) && !isAdmin()) {
             throw new SecurityException("Forbidden: Cannot view transactions of this wallet");
         }
+        double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
 
         return transactionRepository.findByWalletId(walletId).stream()
                 .map(tx -> new WalletTransactionResponseDTO(
@@ -227,7 +253,9 @@ public class WalletTransactionService {
                         tx.getAmount(),
                         tx.getType().name(),
                         tx.getTransactionDate(),
-                        tx.getDescription()))
+                        tx.getDescription(),
+                        wallet.getBalance(),
+                        availableDailyLimit))
                 .collect(Collectors.toList());
     }
 
@@ -238,12 +266,23 @@ public class WalletTransactionService {
         }
 
         return transactionRepository.findAll().stream()
-                .map(tx -> new WalletTransactionResponseDTO(
-                        tx.getTransactionId(),
-                        tx.getAmount(),
-                        tx.getType().name(),
-                        tx.getTransactionDate(),
-                        tx.getDescription()))
+                .map(tx -> {
+                    WalletEntity wallet = walletRepository.findById(tx.getWalletId())
+                            .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+                    double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+
+                    return new WalletTransactionResponseDTO(
+                            tx.getTransactionId(),
+                            tx.getAmount(),
+                            tx.getType().name(),
+                            tx.getTransactionDate(),
+                            tx.getDescription(),
+                            wallet.getBalance(),
+                            availableDailyLimit
+                    );
+                })
                 .collect(Collectors.toList());
     }
+
 }

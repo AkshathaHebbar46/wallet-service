@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -124,4 +125,21 @@ public class TransactionController {
 
         return ResponseEntity.ok(transactions);
     }
+
+    @GetMapping("/all")
+    public ResponseEntity<Page<WalletTransactionResponseDTO>> getAllUserTransactions(
+            Pageable pageable,
+            HttpServletRequest request
+    ) {
+        // Extract token
+        String token = authValidator.extractToken(request);
+
+        // Extract user ID from token
+        Long userId = authValidator.extractUserId(token);
+
+        // Call the service
+        return ResponseEntity.ok(transactionService.getAllUserTransactions(userId, pageable));
+    }
+
+
 }

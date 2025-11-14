@@ -22,11 +22,9 @@ public class WalletService {
 
     private static final Logger log = LoggerFactory.getLogger(WalletService.class);
     private final WalletRepository walletRepository;
-    private final AuthValidator authValidator;
 
-    public WalletService(WalletRepository walletRepository,AuthValidator authValidator ) {
+    public WalletService(WalletRepository walletRepository) {
         this.walletRepository = walletRepository;
-        this.authValidator = authValidator;
     }
 
     // Create wallet with ownership/admin check
@@ -108,5 +106,23 @@ public class WalletService {
                     return new WalletNotFoundException("Wallet not found with id: " + walletId);
                 });
     }
+
+    @Transactional
+    public void deleteWalletsForUser(Long userId) {
+
+        log.warn("Deleting all wallets for userId={}", userId);
+
+        List<WalletEntity> wallets = walletRepository.findByUserId(userId);
+
+        if (wallets.isEmpty()) {
+            log.info("No wallets found for userId={}", userId);
+            return;
+        }
+
+        walletRepository.deleteAll(wallets);
+
+        log.warn("Deleted {} wallets for userId={}", wallets.size(), userId);
+    }
+
 
 }

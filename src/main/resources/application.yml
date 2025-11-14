@@ -29,3 +29,7 @@ logging:
     org:
       springframework:
         security=DEBUG:
+
+internal:
+  auth:
+    token: super-secret-internal-token

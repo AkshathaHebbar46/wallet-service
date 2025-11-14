@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.walletservice.wallet_service.dto.request.UserIdRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
@@ -18,6 +17,7 @@ import org.walletservice.wallet_service.validation.validator.AuthValidator;
 import org.walletservice.wallet_service.service.wallet.WalletService;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
@@ -39,7 +39,6 @@ public class AdminWalletController {
     }
 
     @PostMapping("/all-wallets")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<WalletResponseDTO>> getAllWalletsForUser(
             @RequestBody UserIdRequestDTO request,
             HttpServletRequest httpRequest) {
@@ -128,4 +127,14 @@ public class AdminWalletController {
 
         return ResponseEntity.ok(transactions);
     }
+
+    @DeleteMapping("/wallets")
+    public ResponseEntity<Void> deleteWalletsForUser(@RequestBody Map<String, Long> body) {
+        Long userId = body.get("userId");
+        walletService.deleteWalletsForUser(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+
+
 }

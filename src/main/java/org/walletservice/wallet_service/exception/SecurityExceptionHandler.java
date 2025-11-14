@@ -32,7 +32,15 @@ public class SecurityExceptionHandler implements AuthenticationEntryPoint, Acces
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
-        log.warn("Unauthorized access attempt to '{}': {}", request.getRequestURI(), authException.getMessage());
+
+        String path = request.getRequestURI();
+
+        // Skip Swagger and favicon
+        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.equals("/favicon.ico")) {
+            return; // Let Spring Security handle access
+        }
+
+        log.warn("Unauthorized access attempt to '{}': {}", path, authException.getMessage());
 
         ErrorResponseDTO error = ErrorResponseDTO.of(
                 HttpStatus.UNAUTHORIZED.value(),
@@ -41,6 +49,7 @@ public class SecurityExceptionHandler implements AuthenticationEntryPoint, Acces
         );
         writeResponse(response, error, HttpStatus.UNAUTHORIZED);
     }
+
 
     /**
      * Called when an authenticated user tries to access a resource they don't have permission for.

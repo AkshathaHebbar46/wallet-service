@@ -22,8 +22,16 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/internal/wallet/**").permitAll()
                         .requestMatchers("/wallets/**").authenticated()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/index.html",
+                                "/favicon.ico"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

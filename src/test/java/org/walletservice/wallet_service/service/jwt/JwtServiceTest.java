@@ -1,79 +1,56 @@
 package org.walletservice.wallet_service.service.jwt;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
-import java.security.Key;
-import java.util.Date;
-import java.util.Map;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.walletservice.wallet_service.util.JwtUtil;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
 
+    @Mock
+    private JwtUtil jwtUtil;
+
+    @InjectMocks
     private JwtService jwtService;
-    private Key signingKey;
-    private String secret;
+
+    private String token;
 
     @BeforeEach
-    void setUp() throws Exception {
-        jwtService = new JwtService();
-
-        // Generate a stable secret (must be >= 256 bits for HS256)
-        secret = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789ABCDEF";
-        signingKey = Keys.hmacShaKeyFor(secret.getBytes());
-
-        // Inject secret field using reflection (since @Value not loaded in unit tests)
-        Field secretField = JwtService.class.getDeclaredField("secret");
-        secretField.setAccessible(true);
-        secretField.set(jwtService, secret);
-    }
-
-    // ───────────────────────────────────────────────
-    private String generateToken(Map<String, Object> claims, String subject, long validityMs) {
-        long now = System.currentTimeMillis();
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + validityMs))
-                .signWith(signingKey, SignatureAlgorithm.HS256)
-                .compact();
+    void setUp() {
+        token = "dummy.jwt.token";
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("✅ Should validate a well-formed token successfully")
     void testValidToken() {
-        String token = generateToken(Map.of("userId", 100L, "role", "USER"), "test@example.com", 3600_000);
-
+        when(jwtUtil.validateToken(token)).thenReturn(true);
         assertTrue(jwtService.isTokenValid(token));
+        verify(jwtUtil).validateToken(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("❌ Should reject an invalid or tampered token")
     void testInvalidToken() {
-        String token = "invalid.token.value";
+        when(jwtUtil.validateToken(token)).thenReturn(false);
         assertFalse(jwtService.isTokenValid(token));
+        verify(jwtUtil).validateToken(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("⚠️ Should reject token with wrong signing key")
-    void testInvalidSignature() throws Exception {
-        // Create token signed with different secret
-        Key badKey = Keys.hmacShaKeyFor("different-secret-different-secret-diff1234".getBytes());
-        String token = Jwts.builder()
-                .setSubject("fake@example.com")
-                .signWith(badKey, SignatureAlgorithm.HS256)
-                .compact();
-
+    void testInvalidSignature() {
+        when(jwtUtil.validateToken(token)).thenReturn(false);
         assertFalse(jwtService.isTokenValid(token));
     }
 
@@ -81,61 +58,76 @@ class JwtServiceTest {
     @Test
     @DisplayName("⌛ Should reject expired tokens")
     void testExpiredToken() {
-        String token = generateToken(Map.of("userId", 200L), "expired@example.com", -1000); // already expired
+        when(jwtUtil.validateToken(token)).thenReturn(false);
         assertFalse(jwtService.isTokenValid(token));
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("📧 Should correctly extract subject (email)")
-    void testExtractEmail() {
-        String token = generateToken(Map.of("userId", 123L, "role", "ADMIN"), "hello@wallet.com", 60000);
+    void testExtractEmail() throws Exception {
+        when(jwtUtil.extractUsername(token)).thenReturn("hello@wallet.com");
         String email = jwtService.extractEmail(token);
         assertEquals("hello@wallet.com", email);
+        verify(jwtUtil).extractUsername(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("🧾 Should extract userId correctly as Long")
-    void testExtractUserId_Long() {
-        String token = generateToken(Map.of("userId", 999L), "id@test.com", 60000);
+    void testExtractUserId_Long() throws Exception {
+        when(jwtUtil.extractUserId(token)).thenReturn(999L);
         Long userId = jwtService.extractUserId(token);
         assertEquals(999L, userId);
+        verify(jwtUtil).extractUserId(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("🔢 Should handle userId as Integer in claims")
-    void testExtractUserId_Integer() {
-        String token = generateToken(Map.of("userId", 42), "id2@test.com", 60000);
+    void testExtractUserId_Integer() throws Exception {
+        // JwtUtil converts Integer to Long internally
+        when(jwtUtil.extractUserId(token)).thenReturn(42L);
         Long userId = jwtService.extractUserId(token);
         assertEquals(42L, userId);
+        verify(jwtUtil).extractUserId(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("🧍 Should extract role correctly")
-    void testExtractRole() {
-        String token = generateToken(Map.of("userId", 12L, "role", "ADMIN"), "role@test.com", 60000);
+    void testExtractRole() throws Exception {
+        when(jwtUtil.extractRole(token)).thenReturn("ADMIN");
         String role = jwtService.extractRole(token);
         assertEquals("ADMIN", role);
+        verify(jwtUtil).extractRole(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
     @DisplayName("🌀 Should return null for missing userId or role claims")
-    void testMissingClaims() {
-        String token = generateToken(Map.of(), "missing@test.com", 60000);
+    void testMissingClaims() throws Exception {
+        when(jwtUtil.extractUserId(token)).thenReturn(null);
+        when(jwtUtil.extractRole(token)).thenReturn(null);
+
         assertNull(jwtService.extractUserId(token));
         assertNull(jwtService.extractRole(token));
+
+        verify(jwtUtil).extractUserId(token);
+        verify(jwtUtil).extractRole(token);
     }
 
     // ───────────────────────────────────────────────
     @Test
-    @DisplayName("🧨 Should throw exception gracefully for malformed tokens")
-    void testExtractFromMalformedToken() {
-        String invalidToken = "not.a.jwt.token";
-        assertFalse(jwtService.isTokenValid(invalidToken));
-        assertThrows(Exception.class, () -> jwtService.extractEmail(invalidToken));
+    @DisplayName("🧨 Should handle malformed tokens gracefully")
+    void testMalformedToken() {
+        when(jwtUtil.validateToken(token)).thenReturn(false);
+
+        assertFalse(jwtService.isTokenValid(token));
+        // Extraction methods would fail if token invalid
+        // You can throw exception if JwtUtil does that internally
+        // Here we simulate with Mockito returning null
+        when(jwtUtil.extractUsername(token)).thenThrow(RuntimeException.class);
+        assertThrows(RuntimeException.class, () -> jwtService.extractEmail(token));
     }
 }

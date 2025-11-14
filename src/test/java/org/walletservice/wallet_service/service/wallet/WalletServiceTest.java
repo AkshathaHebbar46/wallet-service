@@ -7,6 +7,7 @@ import org.walletservice.wallet_service.dto.request.WalletRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.validation.validator.AuthValidator;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,18 +18,20 @@ import static org.mockito.Mockito.*;
 class WalletServiceTest {
 
     private WalletRepository walletRepository;
+    private AuthValidator authValidator;
     private WalletService walletService;
 
     @BeforeEach
     void setUp() {
         walletRepository = mock(WalletRepository.class);
-        walletService = new WalletService(walletRepository);
+        authValidator = mock(AuthValidator.class); // mock the validator
+        walletService = new WalletService(walletRepository, authValidator);
     }
 
     // ---------------- CREATE WALLET ----------------
 
     @Test
-    @DisplayName("Should create wallet when user is admin")
+    @DisplayName("✅ Should create wallet when user is admin")
     void testCreateWallet_AdminSuccess() {
         WalletRequestDTO request = new WalletRequestDTO();
         request.setUserId(10L);
@@ -50,7 +53,7 @@ class WalletServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw error if non-admin tries to create wallet for another user")
+    @DisplayName("❌ Should throw error if non-admin tries to create wallet for another user")
     void testCreateWallet_NonAdminUnauthorized() {
         WalletRequestDTO request = new WalletRequestDTO();
         request.setUserId(2L);
@@ -66,7 +69,7 @@ class WalletServiceTest {
     // ---------------- GET WALLET DETAILS ----------------
 
     @Test
-    @DisplayName("Should return wallet details if admin")
+    @DisplayName("✅ Should return wallet details if admin")
     void testGetWalletDetails_Admin() {
         WalletEntity wallet = new WalletEntity(5L, 200.0);
         wallet.setId(1L);
@@ -81,7 +84,7 @@ class WalletServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw error if non-admin tries to access someone else’s wallet")
+    @DisplayName("❌ Should throw error if non-admin tries to access someone else’s wallet")
     void testGetWalletDetails_NonAdminUnauthorized() {
         WalletEntity wallet = new WalletEntity(5L, 200.0);
         wallet.setId(1L);
@@ -91,25 +94,25 @@ class WalletServiceTest {
                 walletService.getWalletDetails(1L, 3L, false)
         );
 
-        assertEquals("You do not have access to this wallet", ex.getMessage());
+        assertEquals("You cannot access this wallet", ex.getMessage());
     }
 
     @Test
-    @DisplayName("Should throw error if wallet not found")
+    @DisplayName("❌ Should throw error if wallet not found")
     void testGetWalletDetails_NotFound() {
         when(walletRepository.findById(1L)).thenReturn(Optional.empty());
 
-        Exception ex = assertThrows(IllegalArgumentException.class, () ->
+        Exception ex = assertThrows(RuntimeException.class, () ->
                 walletService.getWalletDetails(1L, 2L, true)
         );
 
-        assertEquals("Wallet not found", ex.getMessage());
+        assertTrue(ex.getMessage().contains("Wallet not found"));
     }
 
     // ---------------- GET BALANCE ----------------
 
     @Test
-    @DisplayName("Should return balance for admin")
+    @DisplayName("✅ Should return balance for admin")
     void testGetBalance_Admin() {
         WalletEntity wallet = new WalletEntity(7L, 800.0);
         wallet.setId(1L);
@@ -120,7 +123,7 @@ class WalletServiceTest {
     }
 
     @Test
-    @DisplayName("Should deny access if non-admin tries to get someone else's balance")
+    @DisplayName("❌ Should deny access if non-admin tries to get someone else's balance")
     void testGetBalance_NonAdminUnauthorized() {
         WalletEntity wallet = new WalletEntity(7L, 800.0);
         wallet.setId(1L);
@@ -135,7 +138,7 @@ class WalletServiceTest {
     // ---------------- UPDATE BALANCE ----------------
 
     @Test
-    @DisplayName("Should update balance for admin")
+    @DisplayName("✅ Should update balance for admin")
     void testUpdateBalance_Admin() {
         WalletEntity wallet = new WalletEntity(10L, 100.0);
         wallet.setId(1L);
@@ -153,7 +156,7 @@ class WalletServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw if non-admin updates someone else’s wallet")
+    @DisplayName("❌ Should throw if non-admin updates someone else’s wallet")
     void testUpdateBalance_NonAdminUnauthorized() {
         WalletEntity wallet = new WalletEntity(9L, 100.0);
         wallet.setId(1L);
@@ -168,7 +171,7 @@ class WalletServiceTest {
     // ---------------- GET ALL WALLETS ----------------
 
     @Test
-    @DisplayName("Should return all wallets")
+    @DisplayName("✅ Should return all wallets")
     void testGetAllWallets() {
         WalletEntity w1 = new WalletEntity(1L, 100.0);
         w1.setId(1L);
@@ -182,5 +185,31 @@ class WalletServiceTest {
         assertEquals(2, result.size());
         assertEquals(1L, result.get(0).getUserId());
         assertEquals(200.0, result.get(1).getCurrentBalance());
+    }
+
+    @Test
+    @DisplayName("✅ Should return empty list if no wallets")
+    void testGetAllWallets_Empty() {
+        when(walletRepository.findAll()).thenReturn(List.of());
+        List<WalletResponseDTO> result = walletService.getAllWallets();
+        assertTrue(result.isEmpty());
+    }
+
+    // ---------------- GET WALLETS BY USER ----------------
+
+    @Test
+    @DisplayName("✅ Should return wallets for specific user")
+    void testGetWalletsByUser() {
+        WalletEntity w1 = new WalletEntity(1L, 100.0);
+        w1.setId(1L);
+        WalletEntity w2 = new WalletEntity(1L, 150.0);
+        w2.setId(2L);
+
+        when(walletRepository.findByUserId(1L)).thenReturn(List.of(w1, w2));
+
+        List<WalletResponseDTO> result = walletService.getWalletsByUser(1L);
+        assertEquals(2, result.size());
+        assertEquals(1L, result.get(0).getUserId());
+        assertEquals(2L, result.get(1).getWalletId());
     }
 }

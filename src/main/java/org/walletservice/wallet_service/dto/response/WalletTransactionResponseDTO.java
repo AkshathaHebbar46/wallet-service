@@ -10,7 +10,9 @@ public record WalletTransactionResponseDTO(
         Double amount,
         String type,
         LocalDateTime timestamp,
-        String description
+        String description,
+        double balance,
+        double availableDailyLimit
 ) {
     // Automatically set timestamp if not provided
     public WalletTransactionResponseDTO {

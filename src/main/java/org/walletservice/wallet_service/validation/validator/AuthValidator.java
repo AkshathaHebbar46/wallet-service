@@ -19,16 +19,13 @@ public class AuthValidator {
 
     private final WalletRepository walletRepository;
     private final JwtService jwtService;
-    private final WebClient webClient;
     private final UserServiceConfig userServiceConfig;
 
     public AuthValidator(WalletRepository walletRepository,
                          JwtService jwtService,
-                         WebClient webClient,
                          UserServiceConfig userServiceConfig) {
         this.walletRepository = walletRepository;
         this.jwtService = jwtService;
-        this.webClient = webClient;
         this.userServiceConfig = userServiceConfig;
     }
 
@@ -39,6 +36,11 @@ public class AuthValidator {
         }
         return header.substring(7);
     }
+
+    public Long extractUserId(String token) {
+        return jwtService.extractUserId(token);
+    }
+
 
     public AuthContext getAuthContext(HttpServletRequest request) {
         String token = extractToken(request);
@@ -68,22 +70,5 @@ public class AuthValidator {
         }
 
         return true;
-    }
-
-    public boolean isUserBlacklisted(Long userId) {
-        try {
-            String url = userServiceConfig.getBaseUrl() + "/users/" + userId + "/blacklisted";
-
-            Boolean response = webClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .bodyToMono(Boolean.class)
-                    .onErrorResume(e -> Mono.just(false))
-                    .block();
-
-            return Boolean.TRUE.equals(response);
-        } catch (Exception e) {
-            return false;
-        }
     }
 }

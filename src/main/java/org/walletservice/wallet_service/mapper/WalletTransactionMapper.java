@@ -15,5 +15,8 @@ public interface WalletTransactionMapper {
     TransactionEntity toEntity(WalletTransactionRequestDTO dto);
 
     @Mapping(source = "transactionDate", target = "timestamp")
+    @Mapping(target = "balance", ignore = true) // or provide default
+    @Mapping(target = "availableDailyLimit", ignore = true) // or provide default
     WalletTransactionResponseDTO toDTO(TransactionEntity entity);
 }
+
