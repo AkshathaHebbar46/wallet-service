@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.walletservice.wallet_service.dto.request.UserIdRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
@@ -144,6 +145,7 @@ public class AdminWalletController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "Wallets deleted successfully")
     })
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/wallets")
     public ResponseEntity<Void> deleteWalletsForUser(@RequestBody Map<String, Long> body) {
         Long userId = body.get("userId");

@@ -53,8 +53,6 @@ public class WalletService {
         return new WalletResponseDTO(wallet.getId(), wallet.getUserId(), wallet.getBalance());
     }
 
-
-
     // Get balance with ownership/admin check
     @Transactional(readOnly = true)
     public Double getBalance(Long walletId, Long requesterUserId, boolean isAdmin) {

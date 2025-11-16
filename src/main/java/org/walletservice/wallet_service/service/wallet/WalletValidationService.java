@@ -101,20 +101,6 @@ public class WalletValidationService {
         }
     }
 
-    /**
-     * Validates that the wallet exists and is active.
-     */
-    public void validateWalletActive(WalletEntity wallet) {
-        if (wallet == null) {
-            log.warn("❌ Wallet not found");
-            throw new IllegalArgumentException("Wallet not found");
-        }
-        if (Boolean.FALSE.equals(wallet.getActive())) {
-            log.warn("❌ Wallet {} is inactive", wallet.getId());
-            throw new IllegalStateException("Wallet is inactive");
-        }
-    }
-
     public double getRemainingDailyLimit(WalletEntity wallet) {
         wallet.resetDailyIfNewDay(); // ensure dailySpent is up-to-date
         return DAILY_LIMIT - wallet.getDailySpent();

@@ -49,10 +49,6 @@ public class AuthValidator {
         return new AuthContext(token, userId, isAdmin);
     }
 
-    public boolean isAuthorized(AuthContext ctx, Long targetUserId) {
-        return ctx.isAdmin() || ctx.getUserId().equals(targetUserId);
-    }
-
     public boolean isAuthorizedForWallet(AuthContext auth, Long walletId) {
         Optional<WalletEntity> walletOpt = walletRepository.findById(walletId);
         if (walletOpt.isEmpty()) {

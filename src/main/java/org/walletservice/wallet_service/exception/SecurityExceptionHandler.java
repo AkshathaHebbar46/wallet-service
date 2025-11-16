@@ -36,7 +36,7 @@ public class SecurityExceptionHandler implements AuthenticationEntryPoint, Acces
         String path = request.getRequestURI();
 
         // Skip Swagger and favicon
-        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.equals("/favicon.ico")) {
+        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs")) {
             return; // Let Spring Security handle access
         }
 
