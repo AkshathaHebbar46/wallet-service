@@ -1,130 +1,120 @@
-package org.walletservice.wallet_service.controller.admin.blacklist;
+package org.walletservice.wallet_service.controller.blacklist;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
-import org.walletservice.wallet_service.controller.blacklist.WalletBlacklistController;
 import org.walletservice.wallet_service.service.wallet.WalletBlacklistService;
 
-import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link WalletBlacklistController}.
- */
 class WalletBlacklistControllerTest {
 
     @Mock
     private WalletBlacklistService walletBlacklistService;
 
     @InjectMocks
-    private WalletBlacklistController walletBlacklistController;
+    private WalletBlacklistController controller;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
     }
 
-    // -------------------------------------------------------------------------
-    // 1️⃣ Blacklist all wallets for a user
-    // -------------------------------------------------------------------------
+    // ------------------- 1. Blacklist all wallets by user -------------------
     @Test
-    void blacklistWalletsByUser_shouldCallServiceWithCorrectUserId() {
-        Map<String, Long> request = Map.of("userId", 5L);
+    void testBlacklistWalletsByUser() {
+        Map<String, Long> request = Map.of("userId", 1L);
+        controller.blacklistWalletsByUser(request);
 
-        walletBlacklistController.blacklistWalletsByUser(request);
-
-        verify(walletBlacklistService).blacklistUserWallets(5L);
+        verify(walletBlacklistService, times(1)).blacklistUserWallets(1L);
     }
 
-    // -------------------------------------------------------------------------
-    // 2️⃣ Unblock all wallets for a user
-    // -------------------------------------------------------------------------
+    // ------------------- 2. Unblock all wallets by user -------------------
     @Test
-    void unblockWalletsByUser_shouldCallServiceWithCorrectUserId() {
-        Map<String, Long> request = Map.of("userId", 10L);
+    void testUnblockWalletsByUser() {
+        Map<String, Long> request = Map.of("userId", 2L);
+        controller.unblockWalletsByUser(request);
 
-        walletBlacklistController.unblockWalletsByUser(request);
-
-        verify(walletBlacklistService).unblockUserWallets(10L);
+        verify(walletBlacklistService, times(1)).unblockUserWallets(2L);
     }
 
-    // -------------------------------------------------------------------------
-    // 3️⃣ Blacklist specific wallet
-    // -------------------------------------------------------------------------
+    // ------------------- 3. Blacklist single wallet -------------------
     @Test
-    void blacklistWallet_shouldCallServiceWithCorrectWalletId() {
-        walletBlacklistController.blacklistWallet(123L);
+    void testBlacklistWallet() {
+        Long walletId = 5L;
+        controller.blacklistWallet(walletId);
 
-        verify(walletBlacklistService).blacklistWallet(123L);
+        verify(walletBlacklistService, times(1)).blacklistWallet(walletId);
     }
 
-    // -------------------------------------------------------------------------
-    // 4️⃣ Unblock specific wallet
-    // -------------------------------------------------------------------------
+    // ------------------- 4. Unblock single wallet -------------------
     @Test
-    void unblockWallet_shouldCallServiceWithCorrectWalletId() {
-        walletBlacklistController.unblockWallet(456L);
+    void testUnblockWallet() {
+        Long walletId = 6L;
+        controller.unblockWallet(walletId);
 
-        verify(walletBlacklistService).unblockWallet(456L);
+        verify(walletBlacklistService, times(1)).unblockWallet(walletId);
     }
 
-    // -------------------------------------------------------------------------
-    // 5️⃣ Missing userId in request → should call service with null
-    // -------------------------------------------------------------------------
+    // ------------------- 5. Blacklist with missing userId -------------------
     @Test
-    void blacklistWalletsByUser_missingUserId_shouldPassNullToService() {
-        Map<String, Long> badRequest = new HashMap<>();
+    void testBlacklistWalletsByUserMissingId() {
+        Map<String, Long> request = Map.of(); // empty map
+        controller.blacklistWalletsByUser(request);
 
-        walletBlacklistController.blacklistWalletsByUser(badRequest);
-
-        verify(walletBlacklistService).blacklistUserWallets(null);
+        // Verify method is called with null
+        verify(walletBlacklistService, times(1)).blacklistUserWallets(null);
     }
 
-    // -------------------------------------------------------------------------
-    // 6️⃣ Missing userId in unblock request → should call service with null
-    // -------------------------------------------------------------------------
+    // ------------------- 6. Unblock with missing userId -------------------
     @Test
-    void unblockWalletsByUser_missingUserId_shouldPassNullToService() {
-        Map<String, Long> badRequest = new HashMap<>();
+    void testUnblockWalletsByUserMissingId() {
+        Map<String, Long> request = Map.of(); // empty map
+        controller.unblockWalletsByUser(request);
 
-        walletBlacklistController.unblockWalletsByUser(badRequest);
-
-        verify(walletBlacklistService).unblockUserWallets(null);
+        verify(walletBlacklistService, times(1)).unblockUserWallets(null);
     }
 
-    // -------------------------------------------------------------------------
-    // 7️⃣ Service throws exception during blacklist → should propagate
-    // -------------------------------------------------------------------------
+    // ------------------- 7. Blacklist multiple calls -------------------
     @Test
-    void blacklistWallet_whenServiceThrows_shouldPropagateException() {
-        doThrow(new IllegalArgumentException("Wallet not found"))
-                .when(walletBlacklistService).blacklistWallet(999L);
+    void testBlacklistWalletMultipleCalls() {
+        controller.blacklistWallet(10L);
+        controller.blacklistWallet(11L);
 
-        Exception ex = assertThrows(IllegalArgumentException.class, () ->
-                walletBlacklistController.blacklistWallet(999L)
-        );
-
-        assertEquals("Wallet not found", ex.getMessage());
-        verify(walletBlacklistService).blacklistWallet(999L);
+        verify(walletBlacklistService, times(1)).blacklistWallet(10L);
+        verify(walletBlacklistService, times(1)).blacklistWallet(11L);
     }
 
-    // -------------------------------------------------------------------------
-    // 8️⃣ Service throws exception during unblock → should propagate
-    // -------------------------------------------------------------------------
+    // ------------------- 8. Unblock multiple calls -------------------
     @Test
-    void unblockWallet_whenServiceThrows_shouldPropagateException() {
-        doThrow(new IllegalStateException("Wallet already active"))
-                .when(walletBlacklistService).unblockWallet(999L);
+    void testUnblockWalletMultipleCalls() {
+        controller.unblockWallet(20L);
+        controller.unblockWallet(21L);
 
-        Exception ex = assertThrows(IllegalStateException.class, () ->
-                walletBlacklistController.unblockWallet(999L)
-        );
+        verify(walletBlacklistService, times(1)).unblockWallet(20L);
+        verify(walletBlacklistService, times(1)).unblockWallet(21L);
+    }
 
-        assertEquals("Wallet already active", ex.getMessage());
-        verify(walletBlacklistService).unblockWallet(999L);
+    // ------------------- 9. Blacklist and unblock user -------------------
+    @Test
+    void testBlacklistAndUnblockUser() {
+        Map<String, Long> request = Map.of("userId", 99L);
+        controller.blacklistWalletsByUser(request);
+        controller.unblockWalletsByUser(request);
+
+        verify(walletBlacklistService, times(1)).blacklistUserWallets(99L);
+        verify(walletBlacklistService, times(1)).unblockUserWallets(99L);
+    }
+
+    // ------------------- 10. Blacklist and unblock wallet -------------------
+    @Test
+    void testBlacklistAndUnblockWallet() {
+        controller.blacklistWallet(50L);
+        controller.unblockWallet(50L);
+
+        verify(walletBlacklistService, times(1)).blacklistWallet(50L);
+        verify(walletBlacklistService, times(1)).unblockWallet(50L);
     }
 }

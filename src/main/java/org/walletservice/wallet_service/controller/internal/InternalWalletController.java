@@ -1,5 +1,6 @@
 package org.walletservice.wallet_service.controller.internal;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -7,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
 
+@Hidden
 @RestController
 @RequestMapping("/internal/wallet")
 public class InternalWalletController {

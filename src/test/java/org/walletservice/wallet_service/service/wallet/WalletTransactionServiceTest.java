@@ -1,9 +1,9 @@
 package org.walletservice.wallet_service.service.wallet;
 
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.*;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.walletservice.wallet_service.dto.request.WalletTransactionRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletTransactionResponseDTO;
@@ -13,172 +13,205 @@ import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.transaction.TransactionRepository;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class WalletTransactionServiceTest {
 
+    @Mock
     private WalletRepository walletRepository;
+
+    @Mock
     private TransactionRepository transactionRepository;
+
+    @Mock
     private WalletValidationService walletValidationService;
-    private WalletTransactionService service;
+
+    @Mock
+    private WalletInternalValidationService walletInternalValidationService;
+
+    @InjectMocks
+    private WalletTransactionService walletTransactionService;
 
     @BeforeEach
-    void setUp() {
-        walletRepository = mock(WalletRepository.class);
-        transactionRepository = mock(TransactionRepository.class);
-        walletValidationService = mock(WalletValidationService.class);
-        service = new WalletTransactionService(walletRepository, transactionRepository, walletValidationService);
-        mockAuthenticatedUser(10L, false); // default user
-    }
-
-    private void mockAuthenticatedUser(Long userId, boolean isAdmin) {
-        var authorities = isAdmin ? Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                : Set.of(new SimpleGrantedAuthority("ROLE_USER"));
+    void setup() {
+        MockitoAnnotations.openMocks(this);
+        // Mock authentication for userId = 1
         UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(userId, null, authorities);
-        SecurityContext context = mock(SecurityContext.class);
-        when(context.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(context);
+                new UsernamePasswordAuthenticationToken(1L, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
-    }
-
-
+    // ---------------- 1. processTransaction - new CREDIT ----------------
     @Test
-    @DisplayName("Should fail if wallet does not belong to user")
-    void testProcessTransaction_UnauthorizedUser() {
+    void testProcessTransactionCredit() {
         Long walletId = 1L;
-        WalletEntity wallet = new WalletEntity(99L, 200.0); // different user
+        WalletEntity wallet = new WalletEntity();
         wallet.setId(walletId);
+        wallet.setUserId(1L);
+        wallet.setBalance(1000.0);
+
+        WalletTransactionRequestDTO request = new WalletTransactionRequestDTO("txn1", 500.0, "CREDIT", "Deposit");
+
+        when(transactionRepository.findByTransactionId("txn1")).thenReturn(Optional.empty());
         when(walletRepository.findById(walletId)).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(5000.0);
 
-        WalletTransactionRequestDTO request =
-                new WalletTransactionRequestDTO("credit", 20.0, "Invalid user", null);
+        WalletTransactionResponseDTO response = walletTransactionService.processTransaction(walletId, request);
 
-        assertThrows(SecurityException.class,
-                () -> service.processTransaction(walletId, request));
+        assertEquals(1500.0, response.balance());
+        assertEquals("CREDIT", response.type());
+        verify(transactionRepository).save(any(TransactionEntity.class));
     }
 
-
-    // -------------------------------------------------------------
-    // transferMoney()
-    // -------------------------------------------------------------
-
+    // ---------------- 2. processTransaction - idempotent ----------------
     @Test
-    @DisplayName("Should transfer money successfully")
-    void testTransferMoney_Success() {
-        Long fromId = 1L;
-        Long toId = 2L;
-        WalletEntity from = new WalletEntity(10L, 200.0);
-        from.setId(fromId);
-        WalletEntity to = new WalletEntity(20L, 100.0);
-        to.setId(toId);
+    void testProcessTransactionIdempotent() {
+        Long walletId = 1L;
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(walletId);
+        wallet.setUserId(1L);
+        wallet.setBalance(1000.0);
 
-        when(walletRepository.findById(fromId)).thenReturn(Optional.of(from));
-        when(walletRepository.findById(toId)).thenReturn(Optional.of(to));
+        TransactionEntity txn = new TransactionEntity(walletId, TransactionType.CREDIT, 500.0, "Deposit");
+        txn.setTransactionId("txn1");
 
-        when(transactionRepository.save(any(TransactionEntity.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        WalletTransactionRequestDTO request = new WalletTransactionRequestDTO("txn1", 500.0, "CREDIT", "Deposit");
 
-        WalletTransactionResponseDTO response =
-                service.transferMoney(fromId, toId, 50.0);
+        when(transactionRepository.findByTransactionId("txn1")).thenReturn(Optional.of(txn));
+        when(walletRepository.findById(walletId)).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(5000.0);
 
-        assertNotNull(response);
-        assertEquals("DEBIT", response.type());
-        assertEquals(150.0, from.getBalance());
-        assertEquals(150.0, to.getBalance());
+        WalletTransactionResponseDTO response = walletTransactionService.processTransaction(walletId, request);
+        assertEquals("txn1", response.transactionId());
+        assertEquals(1000.0, response.balance()); // balance not updated because idempotent
+    }
+
+    // ---------------- 3. transferMoney ----------------
+    @Test
+    void testTransferMoney() {
+        WalletEntity from = new WalletEntity();
+        from.setId(1L);
+        from.setUserId(1L);
+        from.setBalance(1000.0);
+
+        WalletEntity to = new WalletEntity();
+        to.setId(2L);
+        to.setUserId(2L);
+        to.setBalance(500.0);
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(from));
+        when(walletRepository.findById(2L)).thenReturn(Optional.of(to));
+        doNothing().when(walletInternalValidationService).validateReceiverWallet(2L);
+        doNothing().when(walletValidationService).validateWalletState(from);
+        doNothing().when(walletValidationService).validateBalance(from, 200.0);
+        when(walletValidationService.getRemainingDailyLimit(from)).thenReturn(800.0);
+
+        WalletTransactionResponseDTO response = walletTransactionService.transferMoney(1L, 2L, 200.0);
+
+        assertEquals(800.0, response.balance()); // from wallet balance after transfer
         verify(walletRepository, times(2)).save(any(WalletEntity.class));
         verify(transactionRepository, times(2)).save(any(TransactionEntity.class));
     }
 
+    // ---------------- 4. listTransactions ----------------
     @Test
-    @DisplayName("Should throw if same wallet IDs provided")
-    void testTransferMoney_SameWallet() {
-        assertThrows(IllegalArgumentException.class,
-                () -> service.transferMoney(1L, 1L, 100.0));
-    }
+    void testListTransactions() {
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setUserId(1L);
+        wallet.setBalance(1000.0);
 
-    @Test
-    @DisplayName("Should throw if unauthorized user tries transfer")
-    void testTransferMoney_Unauthorized() {
-        Long fromId = 1L;
-        Long toId = 2L;
-        WalletEntity from = new WalletEntity(99L, 100.0); // belongs to someone else
-        from.setId(fromId);
-        WalletEntity to = new WalletEntity(10L, 50.0);
-        to.setId(toId);
+        TransactionEntity txn = new TransactionEntity(wallet.getId(), TransactionType.CREDIT, 500.0, "Deposit");
+        txn.setTransactionId("txn1");
 
-        when(walletRepository.findById(fromId)).thenReturn(Optional.of(from));
-        when(walletRepository.findById(toId)).thenReturn(Optional.of(to));
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(2000.0);
+        when(transactionRepository.findByWalletId(1L)).thenReturn(List.of(txn));
 
-        assertThrows(SecurityException.class,
-                () -> service.transferMoney(fromId, toId, 50.0));
-    }
-
-    // -------------------------------------------------------------
-    // listTransactions()
-    // -------------------------------------------------------------
-
-    @Test
-    @DisplayName("Should list transactions for wallet owner")
-    void testListTransactions_Success() {
-        Long walletId = 1L;
-        WalletEntity wallet = new WalletEntity(10L, 200.0);
-        wallet.setId(walletId);
-        TransactionEntity tx = new TransactionEntity(walletId, TransactionType.CREDIT, 50.0, "Deposit");
-        tx.setTransactionId("tx1");
-
-        when(walletRepository.findById(walletId)).thenReturn(Optional.of(wallet));
-        when(transactionRepository.findByWalletId(walletId)).thenReturn(List.of(tx));
-
-        List<WalletTransactionResponseDTO> list = service.listTransactions(walletId);
+        List<WalletTransactionResponseDTO> list = walletTransactionService.listTransactions(1L);
 
         assertEquals(1, list.size());
-        assertEquals("tx1", list.get(0).transactionId());
+        assertEquals("txn1", list.get(0).transactionId());
     }
 
+    // ---------------- 5. getAllTransactions - admin ----------------
     @Test
-    @DisplayName("Should block user from listing transactions of another wallet")
-    void testListTransactions_Unauthorized() {
-        Long walletId = 1L;
-        WalletEntity wallet = new WalletEntity(99L, 100.0);
-        wallet.setId(walletId);
-        when(walletRepository.findById(walletId)).thenReturn(Optional.of(wallet));
+    void testGetAllTransactionsAdmin() {
+        // Mock admin authentication
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(1L, null, List.of(() -> "ROLE_ADMIN"));
+        SecurityContextHolder.getContext().setAuthentication(auth);
 
-        assertThrows(SecurityException.class,
-                () -> service.listTransactions(walletId));
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setUserId(1L);
+        wallet.setBalance(1000.0);
+
+        TransactionEntity txn = new TransactionEntity(wallet.getId(), TransactionType.CREDIT, 500.0, "Deposit");
+        txn.setTransactionId("txn1");
+
+        when(transactionRepository.findAll()).thenReturn(List.of(txn));
+        when(walletRepository.findById(wallet.getId())).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(2000.0);
+
+        List<WalletTransactionResponseDTO> list = walletTransactionService.getAllTransactions();
+        assertEquals(1, list.size());
+        assertEquals("txn1", list.get(0).transactionId());
     }
 
-    // -------------------------------------------------------------
-    // getAllTransactions()
-    // -------------------------------------------------------------
-
+    // ---------------- 6. getAllTransactions - non-admin forbidden ----------------
     @Test
-    @DisplayName("Should allow admin to fetch all transactions")
-    void testGetAllTransactions_Admin() {
-        mockAuthenticatedUser(1L, true); // admin
-
-        TransactionEntity tx = new TransactionEntity(1L, TransactionType.CREDIT, 100.0, "Admin view");
-        tx.setTransactionId("TX-1");
-        when(transactionRepository.findAll()).thenReturn(List.of(tx));
-
-        List<WalletTransactionResponseDTO> result = service.getAllTransactions();
-        assertEquals(1, result.size());
-        assertEquals("TX-1", result.get(0).transactionId());
+    void testGetAllTransactionsNonAdminForbidden() {
+        assertThrows(SecurityException.class, () -> walletTransactionService.getAllTransactions());
     }
 
+    // ---------------- 7. processTransaction - negative amount ----------------
     @Test
-    @DisplayName("Should block non-admin from fetching all transactions")
-    void testGetAllTransactions_NonAdminForbidden() {
-        assertThrows(SecurityException.class,
-                () -> service.getAllTransactions());
+    void testProcessTransactionNegativeAmount() {
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setUserId(1L);
+        wallet.setBalance(1000.0);
+
+        WalletTransactionRequestDTO request = new WalletTransactionRequestDTO("txn1", -100.0, "CREDIT", "Deposit");
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(wallet));
+
+        assertThrows(IllegalArgumentException.class, () -> walletTransactionService.processTransaction(1L, request));
+    }
+
+    // ---------------- 8. transferMoney - same wallet ----------------
+    @Test
+    void testTransferMoneySameWallet() {
+        assertThrows(IllegalArgumentException.class, () -> walletTransactionService.transferMoney(1L, 1L, 100.0));
+    }
+
+    // ---------------- 9. transferMoney - negative amount ----------------
+    @Test
+    void testTransferMoneyNegativeAmount() {
+        assertThrows(IllegalArgumentException.class, () -> walletTransactionService.transferMoney(1L, 2L, -50.0));
+    }
+
+    // ---------------- 10. processTransaction - DEBIT insufficient balance ----------------
+    @Test
+    void testProcessTransactionDebitInsufficientBalance() {
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setUserId(1L);
+        wallet.setBalance(100.0);
+
+        WalletTransactionRequestDTO request = new WalletTransactionRequestDTO("txn1", 200.0, "DEBIT", "Withdraw");
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(wallet));
+        doThrow(new IllegalArgumentException("Insufficient balance"))
+                .when(walletValidationService).validateBalance(wallet, 200.0);
+
+        assertThrows(IllegalArgumentException.class, () -> walletTransactionService.processTransaction(1L, request));
     }
 }

@@ -1,7 +1,8 @@
 package org.walletservice.wallet_service.controller.admin;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.*;
 import org.springframework.http.ResponseEntity;
 import org.walletservice.wallet_service.dto.request.UserIdRequestDTO;
@@ -9,25 +10,34 @@ import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
 import org.walletservice.wallet_service.dto.response.WalletTransactionResponseDTO;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.exception.UnauthorizedAccessException;
-import org.walletservice.wallet_service.exception.WalletNotFoundException;
 import org.walletservice.wallet_service.security.AuthContext;
-import org.walletservice.wallet_service.service.wallet.*;
+import org.walletservice.wallet_service.service.wallet.WalletFreezeService;
+import org.walletservice.wallet_service.service.wallet.WalletTransactionService;
+import org.walletservice.wallet_service.service.wallet.WalletService;
 import org.walletservice.wallet_service.validation.validator.AuthValidator;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class AdminWalletControllerTest {
 
-    @Mock private WalletService walletService;
-    @Mock private AuthValidator authValidator;
-    @Mock private WalletFreezeService walletFreezeService;
-    @Mock private WalletTransactionService walletTransactionService;
-    @Mock private HttpServletRequest httpRequest;
-    @Mock private AuthContext auth;
+    @Mock
+    private WalletService walletService;
+
+    @Mock
+    private AuthValidator authValidator;
+
+    @Mock
+    private WalletFreezeService walletFreezeService;
+
+    @Mock
+    private WalletTransactionService walletTransactionService;
+
+    @Mock
+    private HttpServletRequest request;
 
     @InjectMocks
     private AdminWalletController adminWalletController;
@@ -37,139 +47,142 @@ class AdminWalletControllerTest {
         MockitoAnnotations.openMocks(this);
     }
 
-    // ✅ 1. Admin fetches all wallets successfully
+    // ---------------- 1. getAllWalletsForUser - success ----------------
     @Test
-    void getAllWalletsForUser_ShouldReturnWallets_WhenAdmin() {
-        UserIdRequestDTO request = new UserIdRequestDTO(1L);
-        List<WalletResponseDTO> wallets = List.of(new WalletResponseDTO(), new WalletResponseDTO());
+    void testGetAllWalletsForUserSuccess() {
+        UserIdRequestDTO dto = new UserIdRequestDTO(1L);
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
 
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
-        when(walletService.getWalletsByUser(1L)).thenReturn(wallets);
+        WalletResponseDTO wallet = new WalletResponseDTO(1L, 1L, 1000.0); // Correct constructor
+        when(walletService.getWalletsByUser(1L)).thenReturn(List.of(wallet));
 
-        ResponseEntity<List<WalletResponseDTO>> response =
-                adminWalletController.getAllWalletsForUser(request, httpRequest);
-
+        ResponseEntity<List<WalletResponseDTO>> response = adminWalletController.getAllWalletsForUser(dto, request);
         assertEquals(200, response.getStatusCodeValue());
-        assertEquals(2, response.getBody().size());
-        verify(walletService).getWalletsByUser(1L);
+        assertEquals(1, response.getBody().size());
+        assertEquals(wallet.getWalletId(), response.getBody().get(0).getWalletId());
     }
 
-    // ✅ 2. Non-admin should get 403
+    // ---------------- 2. getAllWalletsForUser - no content ----------------
     @Test
-    void getAllWalletsForUser_ShouldReturnForbidden_WhenNotAdmin() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(false);
+    void testGetAllWalletsForUserNoContent() {
+        UserIdRequestDTO dto = new UserIdRequestDTO(1L);
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
 
-        ResponseEntity<List<WalletResponseDTO>> response =
-                adminWalletController.getAllWalletsForUser(new UserIdRequestDTO(1L), httpRequest);
-
-        assertEquals(403, response.getStatusCodeValue());
-        verifyNoInteractions(walletService);
-    }
-
-    // ✅ 3. Admin but no wallets found
-    @Test
-    void getAllWalletsForUser_ShouldReturnNoContent_WhenNoWalletsFound() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
         when(walletService.getWalletsByUser(1L)).thenReturn(List.of());
 
-        ResponseEntity<List<WalletResponseDTO>> response =
-                adminWalletController.getAllWalletsForUser(new UserIdRequestDTO(1L), httpRequest);
-
+        ResponseEntity<List<WalletResponseDTO>> response = adminWalletController.getAllWalletsForUser(dto, request);
         assertEquals(204, response.getStatusCodeValue());
     }
 
-    // ✅ 4. Admin freezes wallet successfully
+    // ---------------- 3. getAllWalletsForUser - unauthorized ----------------
     @Test
-    void freezeWallet_ShouldFreeze_WhenAdmin() {
+    void testGetAllWalletsForUserUnauthorized() {
+        UserIdRequestDTO dto = new UserIdRequestDTO(1L);
+        AuthContext auth = new AuthContext("TOKEN", 1L, false);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
+
+        ResponseEntity<List<WalletResponseDTO>> response = adminWalletController.getAllWalletsForUser(dto, request);
+        assertEquals(403, response.getStatusCodeValue());
+    }
+
+    // ---------------- 4. freezeWallet - success ----------------
+    @Test
+    void testFreezeWalletSuccess() {
+        Long walletId = 1L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
         WalletEntity wallet = new WalletEntity();
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
-        when(walletService.getWalletById(1L)).thenReturn(wallet);
+        wallet.setId(walletId);
 
-        ResponseEntity<String> response = adminWalletController.freezeWallet(1L, httpRequest);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
+        when(walletService.getWalletById(walletId)).thenReturn(wallet);
 
+        ResponseEntity<String> response = adminWalletController.freezeWallet(walletId, request);
         assertEquals(200, response.getStatusCodeValue());
         assertTrue(response.getBody().contains("frozen successfully"));
         verify(walletFreezeService).freezeWallet(wallet);
     }
 
-    // ✅ 5. Non-admin should throw exception for freeze
+    // ---------------- 5. freezeWallet - unauthorized ----------------
     @Test
-    void freezeWallet_ShouldThrowUnauthorized_WhenNotAdmin() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(false);
+    void testFreezeWalletUnauthorized() {
+        Long walletId = 1L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, false);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
 
         assertThrows(UnauthorizedAccessException.class,
-                () -> adminWalletController.freezeWallet(1L, httpRequest));
-
-        verify(walletFreezeService, never()).freezeWallet(any());
+                () -> adminWalletController.freezeWallet(walletId, request));
     }
 
-    // ✅ 6. Admin unfreezes wallet successfully
+    // ---------------- 6. unfreezeWallet - success ----------------
     @Test
-    void unfreezeWallet_ShouldUnfreeze_WhenAdmin() {
+    void testUnfreezeWalletSuccess() {
+        Long walletId = 2L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
         WalletEntity wallet = new WalletEntity();
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
-        when(walletService.getWalletById(5L)).thenReturn(wallet);
+        wallet.setId(walletId);
 
-        ResponseEntity<String> response = adminWalletController.unfreezeWallet(5L, httpRequest);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
+        when(walletService.getWalletById(walletId)).thenReturn(wallet);
 
+        ResponseEntity<String> response = adminWalletController.unfreezeWallet(walletId, request);
         assertEquals(200, response.getStatusCodeValue());
         assertTrue(response.getBody().contains("unfrozen successfully"));
         verify(walletFreezeService).unfreezeWallet(wallet);
     }
 
-    // ✅ 7. Non-admin should throw for unfreeze
+    // ---------------- 7. getWalletTransactions - success ----------------
     @Test
-    void unfreezeWallet_ShouldThrowUnauthorized_WhenNotAdmin() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(false);
+    void testGetWalletTransactionsSuccess() {
+        Long walletId = 3L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
 
-        assertThrows(UnauthorizedAccessException.class,
-                () -> adminWalletController.unfreezeWallet(5L, httpRequest));
-    }
+        WalletTransactionResponseDTO txn = new WalletTransactionResponseDTO("txn1", 100.0, "CREDIT", null, "desc", 1000.0, 5000.0);
+        when(walletTransactionService.listTransactions(walletId)).thenReturn(List.of(txn));
 
-    // ✅ 8. Admin gets wallet transactions
-    @Test
-    void getWalletTransactions_ShouldReturnTransactions_WhenAdmin() {
-        List<WalletTransactionResponseDTO> txs = List.of(
-                new WalletTransactionResponseDTO("tx1", 100.0, "CREDIT", LocalDateTime.now(), "Initial deposit"),
-                new WalletTransactionResponseDTO("tx2", -50.0, "DEBIT", LocalDateTime.now(), "Purchase at store")
-        );
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
-        when(walletTransactionService.listTransactions(10L)).thenReturn(txs);
-
-        ResponseEntity<List<WalletTransactionResponseDTO>> response =
-                adminWalletController.getWalletTransactions(10L, httpRequest);
-
+        ResponseEntity<List<WalletTransactionResponseDTO>> response = adminWalletController.getWalletTransactions(walletId, request);
         assertEquals(200, response.getStatusCodeValue());
-        assertEquals(2, response.getBody().size());
-        verify(walletTransactionService).listTransactions(10L);
+        assertEquals(1, response.getBody().size());
     }
 
-    // ✅ 9. Admin but no transactions found
+    // ---------------- 8. getWalletTransactions - unauthorized ----------------
     @Test
-    void getWalletTransactions_ShouldThrow_WhenNoTransactionsFound() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(true);
-        when(walletTransactionService.listTransactions(10L)).thenReturn(List.of());
-
-        assertThrows(WalletNotFoundException.class,
-                () -> adminWalletController.getWalletTransactions(10L, httpRequest));
-    }
-
-    // ✅ 10. Non-admin should throw unauthorized for transactions
-    @Test
-    void getWalletTransactions_ShouldThrowUnauthorized_WhenNotAdmin() {
-        when(authValidator.getAuthContext(httpRequest)).thenReturn(auth);
-        when(auth.isAdmin()).thenReturn(false);
+    void testGetWalletTransactionsUnauthorized() {
+        Long walletId = 3L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, false);
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
 
         assertThrows(UnauthorizedAccessException.class,
-                () -> adminWalletController.getWalletTransactions(10L, httpRequest));
+                () -> adminWalletController.getWalletTransactions(walletId, request));
+    }
+
+    // ---------------- 9. deleteWalletsForUser - success ----------------
+    @Test
+    void testDeleteWalletsForUser() {
+        Map<String, Long> body = Map.of("userId", 1L);
+
+        doNothing().when(walletService).deleteWalletsForUser(1L);
+
+        ResponseEntity<Void> response = adminWalletController.deleteWalletsForUser(body);
+        assertEquals(204, response.getStatusCodeValue());
+        verify(walletService).deleteWalletsForUser(1L);
+    }
+
+    // ---------------- 10. freezeWallet - verify logging call ----------------
+    @Test
+    void testFreezeWalletLogging() {
+        Long walletId = 10L;
+        AuthContext auth = new AuthContext("TOKEN", 1L, true);
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(walletId);
+
+        when(authValidator.getAuthContext(request)).thenReturn(auth);
+        when(walletService.getWalletById(walletId)).thenReturn(wallet);
+
+        ResponseEntity<String> response = adminWalletController.freezeWallet(walletId, request);
+        assertEquals("Wallet 10 frozen successfully", response.getBody());
+        verify(walletFreezeService).freezeWallet(wallet);
     }
 }

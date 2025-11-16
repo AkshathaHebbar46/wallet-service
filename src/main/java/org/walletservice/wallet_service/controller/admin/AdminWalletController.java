@@ -1,5 +1,9 @@
 package org.walletservice.wallet_service.controller.admin;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +25,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
+@Tag(name = "Admin Wallet APIs", description = "Endpoints for admin operations on wallets")
 public class AdminWalletController {
 
     private static final Logger log = LoggerFactory.getLogger(AdminWalletController.class);
@@ -38,6 +43,12 @@ public class AdminWalletController {
         this.walletTransactionService = walletTransactionService;
     }
 
+    @Operation(summary = "Get all wallets for a user", description = "Fetches all wallets associated with a given user ID. Admin only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallets retrieved successfully"),
+            @ApiResponse(responseCode = "204", description = "No wallets found for the user"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PostMapping("/all-wallets")
     public ResponseEntity<List<WalletResponseDTO>> getAllWalletsForUser(
             @RequestBody UserIdRequestDTO request,
@@ -46,7 +57,7 @@ public class AdminWalletController {
         AuthContext auth = authValidator.getAuthContext(httpRequest);
 
         if (!auth.isAdmin()) {
-            return ResponseEntity.status(403).build(); // Forbidden for non-admins
+            return ResponseEntity.status(403).build();
         }
 
         Long userId = request.getUserId();
@@ -55,15 +66,17 @@ public class AdminWalletController {
         List<WalletResponseDTO> wallets = walletService.getWalletsByUser(userId);
 
         if (wallets.isEmpty()) {
-            return ResponseEntity.noContent().build(); // 204 if no wallets
+            return ResponseEntity.noContent().build();
         }
 
         return ResponseEntity.ok(wallets);
     }
 
-    /**
-     * Freeze a wallet (admin only)
-     */
+    @Operation(summary = "Freeze a wallet", description = "Freeze a wallet by ID. Admin only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallet frozen successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PostMapping("/wallets/{walletId}/freeze")
     public ResponseEntity<String> freezeWallet(@PathVariable Long walletId, HttpServletRequest httpRequest) {
         AuthContext auth = authValidator.getAuthContext(httpRequest);
@@ -71,19 +84,18 @@ public class AdminWalletController {
             throw new UnauthorizedAccessException("You are not authorized to perform this action");
         }
 
-        // Fetch WalletEntity from WalletService
         WalletEntity wallet = walletService.getWalletById(walletId);
-
-        // Freeze the wallet
         walletFreezeService.freezeWallet(wallet);
 
         log.info("Wallet {} frozen by admin", walletId);
         return ResponseEntity.ok("Wallet " + walletId + " frozen successfully");
     }
 
-    /**
-     * Unfreeze a wallet (admin only)
-     */
+    @Operation(summary = "Unfreeze a wallet", description = "Unfreeze a wallet by ID. Admin only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallet unfrozen successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PostMapping("/wallets/{walletId}/unfreeze")
     public ResponseEntity<String> unfreezeWallet(@PathVariable Long walletId, HttpServletRequest httpRequest) {
         AuthContext auth = authValidator.getAuthContext(httpRequest);
@@ -91,19 +103,19 @@ public class AdminWalletController {
             throw new UnauthorizedAccessException("You are not authorized to perform this action");
         }
 
-        // Fetch WalletEntity from WalletService
         WalletEntity wallet = walletService.getWalletById(walletId);
-
-        // Unfreeze the wallet
         walletFreezeService.unfreezeWallet(wallet);
 
         log.info("Wallet {} unfrozen by admin", walletId);
         return ResponseEntity.ok("Wallet " + walletId + " unfrozen successfully");
     }
 
-    /**
-     * Get all transactions for a specific wallet
-     */
+    @Operation(summary = "Get wallet transactions", description = "Retrieve all transactions for a specific wallet. Admin only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Transactions retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Wallet or transactions not found"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @GetMapping("/wallets/{walletId}/transactions")
     public ResponseEntity<List<WalletTransactionResponseDTO>> getWalletTransactions(
             @PathVariable Long walletId,
@@ -128,13 +140,15 @@ public class AdminWalletController {
         return ResponseEntity.ok(transactions);
     }
 
+    @Operation(summary = "Delete all wallets for a user", description = "Delete all wallets associated with a user ID. Admin only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Wallets deleted successfully")
+    })
     @DeleteMapping("/wallets")
     public ResponseEntity<Void> deleteWalletsForUser(@RequestBody Map<String, Long> body) {
         Long userId = body.get("userId");
         walletService.deleteWalletsForUser(userId);
         return ResponseEntity.noContent().build();
     }
-
-
 
 }

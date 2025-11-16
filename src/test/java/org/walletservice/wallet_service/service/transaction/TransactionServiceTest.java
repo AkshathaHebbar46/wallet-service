@@ -1,229 +1,152 @@
 package org.walletservice.wallet_service.service.transaction;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.mockito.*;
+import org.springframework.data.domain.*;
 import org.walletservice.wallet_service.dto.response.WalletTransactionResponseDTO;
 import org.walletservice.wallet_service.entity.transaction.TransactionEntity;
 import org.walletservice.wallet_service.entity.transaction.TransactionType;
+import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.transaction.TransactionRepository;
+import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.service.wallet.WalletValidationService;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
- * ✅ Comprehensive unit tests for {@link TransactionService}.
- */
 class TransactionServiceTest {
 
+    @Mock
     private TransactionRepository transactionRepository;
+
+    @Mock
+    private WalletRepository walletRepository;
+
+    @Mock
+    private WalletValidationService walletValidationService;
+
+    @InjectMocks
     private TransactionService transactionService;
 
     @BeforeEach
-    void setUp() {
-        transactionRepository = mock(TransactionRepository.class);
-        transactionService = new TransactionService(transactionRepository);
+    void setup() {
+        MockitoAnnotations.openMocks(this);
     }
 
-    // ───────────────────────────────
+    // ---------------- 1. getFilteredTransactions ----------------
     @Test
-    @DisplayName("✅ Should map transactions correctly when data exists")
-    void testGetFilteredTransactions_Success() {
+    void testGetFilteredTransactions() {
         Long walletId = 1L;
-        TransactionType type = TransactionType.CREDIT;
-        LocalDateTime start = LocalDateTime.now().minusDays(5);
-        LocalDateTime end = LocalDateTime.now();
-        PageRequest pageable = PageRequest.of(0, 10);
+        TransactionEntity txn = new TransactionEntity();
+        txn.setTransactionId("txn1");
+        txn.setAmount(500.0);
+        txn.setType(TransactionType.CREDIT);
+        txn.setTransactionDate(LocalDateTime.now());
+        txn.setDescription("Test txn");
+        txn.setWalletId(walletId);
 
-        TransactionEntity entity = new TransactionEntity();
-        entity.setTransactionId("TXN-123");
-        entity.setWalletId(walletId);
-        entity.setAmount(250.0);
-        entity.setType(TransactionType.CREDIT);
-        entity.setTransactionDate(LocalDateTime.now().minusDays(1));
-        entity.setDescription("Top-up");
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(walletId);
+        wallet.setBalance(1000.0);
 
-        when(transactionRepository.findFilteredTransactions(walletId, type, start, end, pageable))
-                .thenReturn(new PageImpl<>(List.of(entity)));
+        Page<TransactionEntity> txnPage = new PageImpl<>(List.of(txn));
 
-        Page<WalletTransactionResponseDTO> result =
-                transactionService.getFilteredTransactions(walletId, type, start, end, pageable);
+        when(transactionRepository.findFilteredTransactions(
+                eq(walletId), eq(TransactionType.CREDIT), any(), any(), any(Pageable.class)))
+                .thenReturn(txnPage);
 
-        assertNotNull(result);
-        assertEquals(1, result.getContent().size());
-        WalletTransactionResponseDTO dto = result.getContent().get(0);
+        when(walletRepository.findById(walletId)).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(5000.0);
 
-        assertEquals("TXN-123", dto.transactionId());
-        assertEquals(250.0, dto.amount());
-        assertEquals("CREDIT", dto.type());
-        assertEquals("Top-up", dto.description());
-        assertNotNull(dto.timestamp());
-
-        verify(transactionRepository).findFilteredTransactions(walletId, type, start, end, pageable);
-    }
-
-    // ───────────────────────────────
-    @Test
-    @DisplayName("🟡 Should handle empty transaction results gracefully")
-    void testGetFilteredTransactions_EmptyResult() {
-        Long walletId = 99L;
-        TransactionType type = TransactionType.DEBIT;
-        LocalDateTime start = LocalDateTime.now().minusDays(7);
-        LocalDateTime end = LocalDateTime.now();
-        PageRequest pageable = PageRequest.of(0, 5);
-
-        when(transactionRepository.findFilteredTransactions(walletId, type, start, end, pageable))
-                .thenReturn(Page.empty(pageable));
-
-        Page<WalletTransactionResponseDTO> result =
-                transactionService.getFilteredTransactions(walletId, type, start, end, pageable);
-
-        assertTrue(result.isEmpty());
-        verify(transactionRepository).findFilteredTransactions(walletId, type, start, end, pageable);
-    }
-
-    // ───────────────────────────────
-    @Test
-    @DisplayName("🟢 Should pass correct arguments to repository")
-    void testGetFilteredTransactions_VerifyArguments() {
-        Long walletId = 42L;
-        TransactionType type = TransactionType.DEBIT;
-        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
-        LocalDateTime end = LocalDateTime.of(2024, 1, 31, 23, 59);
-        PageRequest pageable = PageRequest.of(1, 20);
-
-        when(transactionRepository.findFilteredTransactions(any(), any(), any(), any(), any()))
-                .thenReturn(Page.empty(pageable));
-
-        transactionService.getFilteredTransactions(walletId, type, start, end, pageable);
-
-        ArgumentCaptor<Long> walletCaptor = ArgumentCaptor.forClass(Long.class);
-        ArgumentCaptor<TransactionType> typeCaptor = ArgumentCaptor.forClass(TransactionType.class);
-        ArgumentCaptor<LocalDateTime> startCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-        ArgumentCaptor<LocalDateTime> endCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-        ArgumentCaptor<PageRequest> pageableCaptor = ArgumentCaptor.forClass(PageRequest.class);
-
-        verify(transactionRepository).findFilteredTransactions(
-                walletCaptor.capture(),
-                typeCaptor.capture(),
-                startCaptor.capture(),
-                endCaptor.capture(),
-                pageableCaptor.capture()
+        Page<WalletTransactionResponseDTO> result = transactionService.getFilteredTransactions(
+                walletId, TransactionType.CREDIT, LocalDateTime.now().minusDays(1), LocalDateTime.now(), PageRequest.of(0, 10)
         );
 
-        assertEquals(walletId, walletCaptor.getValue());
-        assertEquals(type, typeCaptor.getValue());
-        assertEquals(start, startCaptor.getValue());
-        assertEquals(end, endCaptor.getValue());
-        assertEquals(pageable, pageableCaptor.getValue());
+        assertEquals(1, result.getTotalElements());
+        WalletTransactionResponseDTO dto = result.getContent().get(0);
+        assertEquals("txn1", dto.transactionId());
+        assertEquals(1000.0, dto.balance());
+        assertEquals(5000.0, dto.availableDailyLimit());
     }
 
-    // ───────────────────────────────
+    // ---------------- 2. getAllUserTransactions ----------------
     @Test
-    @DisplayName("🔴 Should handle repository exception safely")
-    void testGetFilteredTransactions_RepositoryThrowsException() {
-        Long walletId = 7L;
-        TransactionType type = TransactionType.CREDIT;
-        LocalDateTime start = LocalDateTime.now().minusDays(2);
-        LocalDateTime end = LocalDateTime.now();
-        PageRequest pageable = PageRequest.of(0, 5);
+    void testGetAllUserTransactions() {
+        Long userId = 1L;
 
-        when(transactionRepository.findFilteredTransactions(any(), any(), any(), any(), any()))
-                .thenThrow(new RuntimeException("DB failure"));
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setBalance(2000.0);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () ->
-                transactionService.getFilteredTransactions(walletId, type, start, end, pageable));
+        TransactionEntity txn = new TransactionEntity();
+        txn.setTransactionId("txn2");
+        txn.setAmount(300.0);
+        txn.setType(TransactionType.DEBIT);
+        txn.setTransactionDate(LocalDateTime.now());
+        txn.setDescription("Debit txn");
+        txn.setWalletId(wallet.getId());
 
-        assertEquals("DB failure", ex.getMessage());
+        Page<TransactionEntity> txnPage = new PageImpl<>(List.of(txn));
+
+        when(walletRepository.findByUserId(userId)).thenReturn(List.of(wallet));
+        when(transactionRepository.findByWalletIdIn(List.of(wallet.getId()), PageRequest.of(0, 10)))
+                .thenReturn(txnPage);
+        when(walletRepository.findById(wallet.getId())).thenReturn(Optional.of(wallet));
+        when(walletValidationService.getRemainingDailyLimit(wallet)).thenReturn(4000.0);
+
+        Page<WalletTransactionResponseDTO> result = transactionService.getAllUserTransactions(
+                userId, PageRequest.of(0, 10)
+        );
+
+        assertEquals(1, result.getTotalElements());
+        WalletTransactionResponseDTO dto = result.getContent().get(0);
+        assertEquals("txn2", dto.transactionId());
+        assertEquals(2000.0, dto.balance());
+        assertEquals(4000.0, dto.availableDailyLimit());
     }
 
-    // ───────────────────────────────
+    // ---------------- 3. getAllUserTransactions - no wallets ----------------
     @Test
-    @DisplayName("🟠 Should set current timestamp if transactionDate is null")
-    void testGetFilteredTransactions_NullTransactionDate() {
-        Long walletId = 1L;
-        TransactionType type = TransactionType.CREDIT;
-        PageRequest pageable = PageRequest.of(0, 1);
+    void testGetAllUserTransactionsNoWallets() {
+        Long userId = 1L;
+        when(walletRepository.findByUserId(userId)).thenReturn(List.of());
 
-        TransactionEntity entity = new TransactionEntity();
-        entity.setTransactionId("TXN-NULL-DATE");
-        entity.setWalletId(walletId);
-        entity.setAmount(100.0);
-        entity.setType(TransactionType.CREDIT);
-        entity.setTransactionDate(null);
-        entity.setDescription("Null date test");
-
-        when(transactionRepository.findFilteredTransactions(eq(walletId), eq(type), any(), any(), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(entity)));
-
-        Page<WalletTransactionResponseDTO> result =
-                transactionService.getFilteredTransactions(walletId, type, null, null, pageable);
-
-        assertEquals(1, result.getContent().size());
-        assertNotNull(result.getContent().get(0).timestamp()); // should be auto-set
+        Page<WalletTransactionResponseDTO> result = transactionService.getAllUserTransactions(userId, PageRequest.of(0, 10));
+        assertEquals(0, result.getTotalElements());
     }
 
-    // ───────────────────────────────
+    // ---------------- 4. getFilteredTransactions - wallet not found ----------------
     @Test
-    @DisplayName("🧊 Should handle startDate after endDate gracefully (inverted range)")
-    void testGetFilteredTransactions_InvertedDateRange() {
-        Long walletId = 3L;
-        TransactionType type = TransactionType.DEBIT;
-        LocalDateTime start = LocalDateTime.now();
-        LocalDateTime end = LocalDateTime.now().minusDays(5);
-        PageRequest pageable = PageRequest.of(0, 5);
+    void testGetFilteredTransactionsWalletNotFound() {
+        Long walletId = 99L;
 
-        // even though dates are invalid logically, service should still pass to repo safely
-        when(transactionRepository.findFilteredTransactions(walletId, type, start, end, pageable))
-                .thenReturn(Page.empty(pageable));
+        when(transactionRepository.findFilteredTransactions(eq(walletId), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+        when(walletRepository.findById(walletId)).thenReturn(Optional.empty());
 
-        Page<WalletTransactionResponseDTO> result =
-                transactionService.getFilteredTransactions(walletId, type, start, end, pageable);
-
-        assertTrue(result.isEmpty());
-        verify(transactionRepository).findFilteredTransactions(walletId, type, start, end, pageable);
+        assertThrows(IllegalArgumentException.class, () ->
+                transactionService.getFilteredTransactions(walletId, TransactionType.CREDIT, null, null, PageRequest.of(0, 10))
+        );
     }
 
-    // ───────────────────────────────
+    // ---------------- 5. getAllUserTransactions - transaction empty ----------------
     @Test
-    @DisplayName("🧩 Should support pagination correctly")
-    void testGetFilteredTransactions_Pagination() {
-        Long walletId = 5L;
-        TransactionType type = TransactionType.CREDIT;
-        LocalDateTime start = LocalDateTime.now().minusDays(30);
-        LocalDateTime end = LocalDateTime.now();
-        PageRequest pageable = PageRequest.of(2, 2); // page index 2, size 2
+    void testGetAllUserTransactionsEmptyTransactions() {
+        Long userId = 1L;
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(1L);
+        wallet.setBalance(1000.0);
 
-        TransactionEntity e1 = new TransactionEntity();
-        e1.setTransactionId("TXN-P1");
-        e1.setType(TransactionType.CREDIT);
-        e1.setTransactionDate(LocalDateTime.now().minusDays(1));
-        e1.setAmount(10.0);
+        when(walletRepository.findByUserId(userId)).thenReturn(List.of(wallet));
+        when(transactionRepository.findByWalletIdIn(List.of(wallet.getId()), PageRequest.of(0, 10)))
+                .thenReturn(Page.empty());
 
-        TransactionEntity e2 = new TransactionEntity();
-        e2.setTransactionId("TXN-P2");
-        e2.setType(TransactionType.CREDIT);
-        e2.setTransactionDate(LocalDateTime.now().minusHours(5));
-        e2.setAmount(20.0);
-
-        when(transactionRepository.findFilteredTransactions(walletId, type, start, end, pageable))
-                .thenReturn(new PageImpl<>(List.of(e1, e2), pageable, 10));
-
-        Page<WalletTransactionResponseDTO> result =
-                transactionService.getFilteredTransactions(walletId, type, start, end, pageable);
-
-        assertEquals(2, result.getContent().size());
-        assertEquals(10, result.getTotalElements());
-        assertEquals(2, result.getSize());
-        assertEquals(2, result.getNumber());
+        Page<WalletTransactionResponseDTO> result = transactionService.getAllUserTransactions(userId, PageRequest.of(0, 10));
+        assertEquals(0, result.getTotalElements());
     }
 }

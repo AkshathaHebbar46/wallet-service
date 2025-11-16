@@ -1,5 +1,9 @@
 package org.walletservice.wallet_service.controller.transaction;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -7,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +29,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/transactions")
+@Tag(name = "Wallet Transaction APIs", description = "Endpoints for wallet transactions and transfers")
 public class TransactionController {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionController.class);
@@ -41,9 +45,11 @@ public class TransactionController {
         this.authValidator = authValidator;
     }
 
-    // ------------------------
-    // Process CREDIT or DEBIT
-    // ------------------------
+    @Operation(summary = "Process a CREDIT or DEBIT transaction", description = "Processes a single transaction (CREDIT or DEBIT) for a specific wallet.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Transaction processed successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PostMapping("/{walletId}")
     public ResponseEntity<WalletTransactionResponseDTO> processTransaction(
             @PathVariable Long walletId,
@@ -60,9 +66,11 @@ public class TransactionController {
         return ResponseEntity.status(201).body(response);
     }
 
-    // ------------------------
-    // Transfer between wallets
-    // ------------------------
+    @Operation(summary = "Transfer money between wallets", description = "Transfers money from one wallet to another.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Transfer completed successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PostMapping("/transfer")
     public ResponseEntity<WalletTransactionResponseDTO> transferMoney(
             @Valid @RequestBody WalletTransferRequestDTO request,
@@ -80,9 +88,11 @@ public class TransactionController {
         return ResponseEntity.status(201).body(response);
     }
 
-    // ------------------------
-    // List all transactions of a wallet
-    // ------------------------
+    @Operation(summary = "List all transactions of a wallet", description = "Retrieves all transactions for a given wallet.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Transactions fetched successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @GetMapping("/{walletId}/list")
     public ResponseEntity<List<WalletTransactionResponseDTO>> listTransactions(
             @PathVariable Long walletId,
@@ -98,9 +108,11 @@ public class TransactionController {
         return ResponseEntity.ok(transactions);
     }
 
-    // ------------------------
-    // Paginated & filtered transaction history
-    // ------------------------
+    @Operation(summary = "Get paginated and filtered transaction history", description = "Fetch transaction history for a wallet with optional filters and pagination.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Transaction history retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @GetMapping("/history")
     public ResponseEntity<Page<WalletTransactionResponseDTO>> getTransactionHistory(
             @RequestParam Long walletId,
@@ -126,20 +138,17 @@ public class TransactionController {
         return ResponseEntity.ok(transactions);
     }
 
+    @Operation(summary = "Get all transactions for the current user", description = "Fetches all wallet transactions for the logged-in user with pagination.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User transactions retrieved successfully")
+    })
     @GetMapping("/all")
     public ResponseEntity<Page<WalletTransactionResponseDTO>> getAllUserTransactions(
             Pageable pageable,
             HttpServletRequest request
     ) {
-        // Extract token
         String token = authValidator.extractToken(request);
-
-        // Extract user ID from token
         Long userId = authValidator.extractUserId(token);
-
-        // Call the service
         return ResponseEntity.ok(transactionService.getAllUserTransactions(userId, pageable));
     }
-
-
 }

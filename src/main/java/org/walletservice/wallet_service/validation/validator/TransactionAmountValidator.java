@@ -10,15 +10,17 @@ public class TransactionAmountValidator implements ConstraintValidator<ValidTran
 
     @Override
     public boolean isValid(Double amount, ConstraintValidatorContext context) {
-        if (amount == null) return true;
+        if (amount == null) return true; // Null-check handled elsewhere if required
 
-        if (amount <= 0) {
+        // Minimum amount enforcement
+        if (amount < 1) {
             context.disableDefaultConstraintViolation();
-            context.buildConstraintViolationWithTemplate("Transaction amount must be greater than zero")
+            context.buildConstraintViolationWithTemplate("Transaction amount must be at least 1")
                     .addConstraintViolation();
             return false;
         }
 
+        // Maximum amount check
         if (amount > MAX_AMOUNT) {
             context.disableDefaultConstraintViolation();
             context.buildConstraintViolationWithTemplate(
@@ -27,6 +29,6 @@ public class TransactionAmountValidator implements ConstraintValidator<ValidTran
             return false;
         }
 
-        return true;
+        return true; // Valid amount
     }
 }

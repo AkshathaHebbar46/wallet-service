@@ -1,5 +1,9 @@
 package org.walletservice.wallet_service.controller.wallet;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -16,6 +20,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/wallets")
+@Tag(name = "Wallet APIs", description = "Endpoints to manage wallets")
 public class WalletController {
 
     private static final Logger log = LoggerFactory.getLogger(WalletController.class);
@@ -29,7 +34,10 @@ public class WalletController {
         this.authValidator = authValidator;
     }
 
-    // ---------------- CREATE WALLET ----------------
+    @Operation(summary = "Create a new wallet", description = "Creates a wallet for the authenticated user or admin.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Wallet created successfully")
+    })
     @PostMapping
     public ResponseEntity<WalletResponseDTO> createWallet(
             @Valid @RequestBody WalletRequestDTO request,
@@ -44,7 +52,11 @@ public class WalletController {
         return ResponseEntity.status(201).body(wallet);
     }
 
-    // ---------------- GET WALLET DETAILS ----------------
+    @Operation(summary = "Get wallet details", description = "Retrieves wallet details by wallet ID for the authenticated user or admin.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallet details retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @GetMapping("/{walletId}")
     public ResponseEntity<WalletResponseDTO> getWalletDetails(
             @PathVariable Long walletId,
@@ -59,7 +71,11 @@ public class WalletController {
         return ResponseEntity.ok(wallet);
     }
 
-    // ---------------- GET WALLET BALANCE ----------------
+    @Operation(summary = "Get wallet balance", description = "Fetches the current balance for a wallet.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Balance fetched successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @GetMapping("/{walletId}/balance")
     public ResponseEntity<Double> getBalance(
             @PathVariable Long walletId,
@@ -74,7 +90,11 @@ public class WalletController {
         return ResponseEntity.ok(balance);
     }
 
-    // ---------------- UPDATE WALLET BALANCE ----------------
+    @Operation(summary = "Update wallet balance", description = "Updates the balance for a specific wallet (admin or authorized user).")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallet balance updated successfully"),
+            @ApiResponse(responseCode = "403", description = "Unauthorized access")
+    })
     @PutMapping("/{walletId}/balance")
     public ResponseEntity<WalletResponseDTO> updateBalance(
             @PathVariable Long walletId,
@@ -95,7 +115,10 @@ public class WalletController {
         return ResponseEntity.ok(updatedWallet);
     }
 
-    // ---------------- GET ALL WALLETS FOR CURRENT USER ----------------
+    @Operation(summary = "Get all wallets for the current user", description = "Fetches all wallets for the authenticated user. Admin can fetch all wallets.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Wallets retrieved successfully")
+    })
     @GetMapping("/all")
     public ResponseEntity<List<WalletResponseDTO>> getWalletsForCurrentUser(HttpServletRequest httpRequest) {
         AuthContext auth = authValidator.getAuthContext(httpRequest);
@@ -104,11 +127,9 @@ public class WalletController {
         List<WalletResponseDTO> wallets;
 
         if (auth.isAdmin()) {
-            // Admins can see all wallets
             wallets = walletService.getAllWallets();
             log.info("Admin fetched all wallets. Total wallets={}", wallets.size());
         } else {
-            // Normal users see only their own wallets
             wallets = walletService.getWalletsByUser(auth.getUserId());
             log.info("User {} fetched {} wallets", auth.getUserId(), wallets.size());
         }
