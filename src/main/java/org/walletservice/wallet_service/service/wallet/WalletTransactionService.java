@@ -80,10 +80,10 @@ public class WalletTransactionService {
         int attempts = 0;
         while (attempts < MAX_RETRY) {
             try {
-                // ✅ Validations outside transaction
+                // Validations outside transaction
                 WalletEntity wallet = validateTransaction(walletId, request);
 
-                // ✅ Transactional processing
+                // Transactional processing
                 return processTransactionTransactional(wallet, request);
 
             } catch (Exception ex) {

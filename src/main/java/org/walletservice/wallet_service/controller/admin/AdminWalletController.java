@@ -147,8 +147,8 @@ public class AdminWalletController {
     })
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/wallets")
-    public ResponseEntity<Void> deleteWalletsForUser(@RequestBody Map<String, Long> body) {
-        Long userId = body.get("userId");
+    public ResponseEntity<Void> deleteWalletsForUser(@RequestBody UserIdRequestDTO requestDTO) {
+        Long userId = requestDTO.getUserId();
         walletService.deleteWalletsForUser(userId);
         return ResponseEntity.noContent().build();
     }

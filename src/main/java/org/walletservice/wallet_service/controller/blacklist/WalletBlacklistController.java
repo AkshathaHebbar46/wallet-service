@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
+import org.walletservice.wallet_service.dto.request.UserIdRequestDTO;
 import org.walletservice.wallet_service.service.wallet.WalletBlacklistService;
 
 import java.util.Map;
@@ -28,9 +29,10 @@ public class WalletBlacklistController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Wallets blacklisted successfully")
     })
-    @PostMapping
-    public void blacklistWalletsByUser(@RequestBody Map<String, Long> request) {
-        Long userId = request.get("userId");
+
+    @PostMapping("/blacklist-wallets")
+    public void blacklistWalletsByUser(@RequestBody UserIdRequestDTO requestDTO) {
+        Long userId = requestDTO.getUserId();
         log.info("Request received to blacklist all wallets for userId={}", userId);
 
         walletBlacklistService.blacklistUserWallets(userId);
@@ -43,8 +45,8 @@ public class WalletBlacklistController {
             @ApiResponse(responseCode = "200", description = "Wallets unblocked successfully")
     })
     @PostMapping("/unblock")
-    public void unblockWalletsByUser(@RequestBody Map<String, Long> request) {
-        Long userId = request.get("userId");
+    public void unblockWalletsByUser(@RequestBody UserIdRequestDTO requestDTO) {
+        Long userId = requestDTO.getUserId();
         log.info("Request received to unblock all wallets for userId={}", userId);
 
         walletBlacklistService.unblockUserWallets(userId);
