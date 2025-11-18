@@ -79,18 +79,6 @@ public class WalletEntity {
         }
     }
 
-    /** ✅ Automatically unfreeze and reset limit after 2 minutes. */
-    public void checkAndUnfreeze() {
-        if (Boolean.TRUE.equals(this.frozen) && this.frozenAt != null) {
-            LocalDateTime now = LocalDateTime.now();
-            if (this.frozenAt.plusMinutes(2).isBefore(now)) {
-                this.frozen = false;
-                this.frozenAt = null;
-                this.dailySpent = 0.0; // 💥 reset spent amount
-            }
-        }
-    }
-
     // --- Getters & Setters ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

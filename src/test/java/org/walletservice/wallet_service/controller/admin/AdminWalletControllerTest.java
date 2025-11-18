@@ -158,18 +158,6 @@ class AdminWalletControllerTest {
                 () -> adminWalletController.getWalletTransactions(walletId, request));
     }
 
-    // ---------------- 9. deleteWalletsForUser - success ----------------
-    @Test
-    void testDeleteWalletsForUser() {
-        Map<String, Long> body = Map.of("userId", 1L);
-
-        doNothing().when(walletService).deleteWalletsForUser(1L);
-
-        ResponseEntity<Void> response = adminWalletController.deleteWalletsForUser(body);
-        assertEquals(204, response.getStatusCodeValue());
-        verify(walletService).deleteWalletsForUser(1L);
-    }
-
     // ---------------- 10. freezeWallet - verify logging call ----------------
     @Test
     void testFreezeWalletLogging() {

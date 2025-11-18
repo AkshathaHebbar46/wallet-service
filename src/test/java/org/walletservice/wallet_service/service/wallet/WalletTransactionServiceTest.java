@@ -12,11 +12,10 @@ import org.walletservice.wallet_service.entity.transaction.TransactionType;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.transaction.TransactionRepository;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.validation.validator.WalletInternalValidationService;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;

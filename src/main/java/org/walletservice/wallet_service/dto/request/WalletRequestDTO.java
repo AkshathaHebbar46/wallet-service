@@ -1,8 +1,9 @@
 package org.walletservice.wallet_service.dto.request;
 
-import jakarta.validation.constraints.Min;
+
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.walletservice.wallet_service.validation.annotation.ValidTransactionAmount;
 
 @Schema(name = "WalletRequestDTO", description = "DTO for creating or updating a wallet")
 public class WalletRequestDTO {
@@ -11,8 +12,9 @@ public class WalletRequestDTO {
     @NotNull(message = "User ID is required")
     private Long userId;
 
-    @Schema(description = "Initial balance of the wallet", example = "1000.0", minimum = "0")
-    @Min(value = 0, message = "Initial balance cannot be negative")
+    @Schema(description = "Initial balance of the wallet", example = "1000.0")
+    @NotNull(message = "Balance is required")
+    @ValidTransactionAmount
     private Double balance;
 
     public WalletRequestDTO() {}

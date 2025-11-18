@@ -30,7 +30,7 @@ public class WalletBlacklistController {
             @ApiResponse(responseCode = "200", description = "Wallets blacklisted successfully")
     })
 
-    @PostMapping("/blacklist-wallets")
+    @PostMapping
     public void blacklistWalletsByUser(@RequestBody UserIdRequestDTO requestDTO) {
         Long userId = requestDTO.getUserId();
         log.info("Request received to blacklist all wallets for userId={}", userId);

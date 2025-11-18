@@ -14,6 +14,7 @@ import org.walletservice.wallet_service.entity.transaction.TransactionType;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.repository.transaction.TransactionRepository;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.validation.validator.WalletInternalValidationService;
 
 import java.util.List;
 import java.util.Objects;

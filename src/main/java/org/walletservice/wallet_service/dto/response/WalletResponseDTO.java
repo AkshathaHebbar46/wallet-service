@@ -2,9 +2,6 @@ package org.walletservice.wallet_service.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/**
- * DTO representing wallet details returned from the Wallet microservice.
- */
 @Schema(name = "WalletResponseDTO", description = "Details of a wallet")
 public class WalletResponseDTO {
 
@@ -14,15 +11,15 @@ public class WalletResponseDTO {
     @Schema(description = "ID of the user who owns this wallet", example = "1001")
     private Long userId;
 
-    @Schema(description = "Current balance in the wallet", example = "2500.75")
-    private Double currentBalance;
+    @Schema(description = "Balance in the wallet", example = "2500.75")
+    private Double balance;
 
     public WalletResponseDTO() {}
 
-    public WalletResponseDTO(Long walletId, Long userId, Double currentBalance) {
+    public WalletResponseDTO(Long walletId, Long userId, Double balance) {
         this.walletId = walletId;
         this.userId = userId;
-        this.currentBalance = currentBalance;
+        this.balance = balance; // FIXED
     }
 
     public Long getWalletId() {
@@ -41,12 +38,12 @@ public class WalletResponseDTO {
         this.userId = userId;
     }
 
-    public Double getCurrentBalance() {
-        return currentBalance;
+    public Double getBalance() {
+        return balance;
     }
 
-    public void setCurrentBalance(Double currentBalance) {
-        this.currentBalance = currentBalance;
+    public void setBalance(Double balance) {
+        this.balance = balance;
     }
 
     @Override
@@ -54,7 +51,7 @@ public class WalletResponseDTO {
         return "WalletResponseDTO{" +
                 "walletId=" + walletId +
                 ", userId=" + userId +
-                ", currentBalance=" + currentBalance +
+                ", balance=" + balance +
                 '}';
     }
 }

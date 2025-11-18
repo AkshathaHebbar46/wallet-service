@@ -41,7 +41,7 @@ class WalletServiceTest {
 
         assertEquals(10L, response.getWalletId());
         assertEquals(1L, response.getUserId());
-        assertEquals(1000.0, response.getCurrentBalance());
+        assertEquals(1000.0, response.getBalance());
     }
 
     // ---------------- 2. createWallet - admin creating for others ----------------
@@ -77,7 +77,7 @@ class WalletServiceTest {
         WalletResponseDTO response = walletService.getWalletDetails(10L, 1L, false);
 
         assertEquals(10L, response.getWalletId());
-        assertEquals(1000.0, response.getCurrentBalance());
+        assertEquals(1000.0, response.getBalance());
     }
 
     // ---------------- 5. getWalletDetails - forbidden ----------------
@@ -115,7 +115,7 @@ class WalletServiceTest {
 
         WalletResponseDTO response = walletService.updateBalance(10L, 2000.0, 1L, false);
 
-        assertEquals(2000.0, response.getCurrentBalance());
+        assertEquals(2000.0, response.getBalance());
     }
 
     // ---------------- 8. getAllWallets ----------------
