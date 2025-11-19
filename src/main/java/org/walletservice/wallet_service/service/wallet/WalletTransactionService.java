@@ -158,7 +158,7 @@ public class WalletTransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
 
         // Internal server validation (system token or internal method)
-        // Example: calling WalletInternalValidationService
+        // calling WalletInternalValidationService
         walletInternalValidationService.validateReceiverWallet(toWalletId);
 
         return new WalletEntity[]{from, to};
@@ -171,7 +171,7 @@ public class WalletTransactionService {
         TransactionType type = TransactionType.valueOf(request.type().toUpperCase());
 
         if (type == TransactionType.DEBIT) {
-            // ✅ Update spent & freeze inside transaction
+            //  Update spent & freeze inside transaction
             walletValidationService.updateDailySpentAndFreeze(wallet, amount);
             wallet.setBalance(wallet.getBalance() - amount);
         } else {
