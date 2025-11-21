@@ -15,25 +15,26 @@ public class TransactionEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
 
     @Column(name = "wallet_id", nullable = false)
     private Long walletId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "type", nullable = false, columnDefinition = "enum('CREDIT','DEBIT','TRANSFER')")
     private TransactionType type;
 
-    @Column(nullable = false)
+    @Column(name = "amount", nullable = false)
     private Double amount;
 
-    @Column(nullable = false)
+    @Column(name = "description", nullable = false, length = 255)
     private String description;
 
     @Column(name = "transaction_date", nullable = false)
     private LocalDateTime transactionDate = LocalDateTime.now();
 
-    @Column(name = "transaction_id", nullable = false, unique = true)
+    @Column(name = "transaction_id", nullable = false, unique = true, length = 255)
     private String transactionId;
 
     // --- Constructors ---

@@ -132,7 +132,7 @@ public class TransactionController {
 
         log.info("Fetching filtered transaction history for walletId={}", walletId);
         Pageable pageable = PageRequest.of(page, size);
-        Page<WalletTransactionResponseDTO> transactions = transactionService.getFilteredTransactions(
+        Page<WalletTransactionResponseDTO> transactions = walletTransactionService.getFilteredTransactions(
                 walletId, type, startDate, endDate, pageable);
 
         return ResponseEntity.ok(transactions);
@@ -149,6 +149,6 @@ public class TransactionController {
     ) {
         String token = authValidator.extractToken(request);
         Long userId = authValidator.extractUserId(token);
-        return ResponseEntity.ok(transactionService.getAllUserTransactions(userId, pageable));
+        return ResponseEntity.ok(walletTransactionService.getAllUserTransactions(userId, pageable));
     }
 }

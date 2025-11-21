@@ -11,8 +11,6 @@ import org.walletservice.wallet_service.dto.response.WalletResponseDTO;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
 import org.walletservice.wallet_service.exception.WalletNotFoundException;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
-import org.walletservice.wallet_service.security.AuthContext;
-import org.walletservice.wallet_service.validation.validator.AuthValidator;
 
 import java.util.List;
 import java.util.stream.Collectors;

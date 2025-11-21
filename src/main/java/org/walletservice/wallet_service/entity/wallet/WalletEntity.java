@@ -6,31 +6,35 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "wallets")
+@Table(
+        name = "wallets",
+        indexes = {
+                @Index(name = "idx_user_id", columnList = "user_id")
+        }
+)
 public class WalletEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(nullable = false)
+    @Column(name = "balance", nullable = false)
     private Double balance = 0.0;
 
     @Version
-    @Column(nullable = false)
-    private Long version = 0L; // Optimistic locking
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
-    // Daily tracking fields
     @Column(name = "daily_spent", nullable = false)
     private Double dailySpent = 0.0;
 
     @Column(name = "last_transaction_date")
     private LocalDateTime lastTransactionDate = LocalDateTime.now();
 
-    // Freeze logic
     @Column(name = "frozen", nullable = false)
     private Boolean frozen = false;
 
@@ -65,7 +69,7 @@ public class WalletEntity {
 
     // --- Helper Methods ---
 
-    /** ✅ Reset daily spent and frozen status if it's a new day (here: every 2 minutes for testing). */
+    /** Reset daily spent and frozen status if it's a new day (here: every 2 minutes for testing). */
     public void resetDailyIfNewDay() {
         if (lastTransactionDate == null) {
             lastTransactionDate = LocalDateTime.now();

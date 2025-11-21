@@ -8,9 +8,7 @@ import org.springframework.data.domain.*;
 import org.walletservice.wallet_service.dto.request.WalletTransactionRequestDTO;
 import org.walletservice.wallet_service.dto.request.WalletTransferRequestDTO;
 import org.walletservice.wallet_service.dto.response.WalletTransactionResponseDTO;
-import org.walletservice.wallet_service.entity.transaction.TransactionType;
 import org.walletservice.wallet_service.security.AuthContext;
-import org.walletservice.wallet_service.service.transaction.TransactionService;
 import org.walletservice.wallet_service.service.wallet.WalletTransactionService;
 import org.walletservice.wallet_service.validation.validator.AuthValidator;
 
@@ -23,9 +21,6 @@ class TransactionControllerTest {
 
     @Mock
     private WalletTransactionService walletTransactionService;
-
-    @Mock
-    private TransactionService transactionService;
 
     @Mock
     private AuthValidator authValidator;
@@ -41,7 +36,6 @@ class TransactionControllerTest {
         MockitoAnnotations.openMocks(this);
     }
 
-    // ------------------ 1. processTransaction success ------------------
     @Test
     void testProcessTransaction() {
         Long walletId = 1L;
@@ -51,7 +45,9 @@ class TransactionControllerTest {
         when(authValidator.getAuthContext(request)).thenReturn(auth);
         when(authValidator.isAuthorizedForWallet(auth, walletId)).thenReturn(true);
 
-        WalletTransactionResponseDTO response = new WalletTransactionResponseDTO("txn1", 500.0, "CREDIT", null, "Test", 1000.0, 5000.0);
+        WalletTransactionResponseDTO response = new WalletTransactionResponseDTO(
+                "txn1", 500.0, "CREDIT", null, "Test payment", 1000.0, 5000.0
+        );
         when(walletTransactionService.processTransaction(walletId, dto)).thenReturn(response);
 
         var result = transactionController.processTransaction(walletId, dto, request);
@@ -60,7 +56,6 @@ class TransactionControllerTest {
         assertEquals("txn1", result.getBody().transactionId());
     }
 
-    // ------------------ 2. transferMoney success ------------------
     @Test
     void testTransferMoney() {
         WalletTransferRequestDTO dto = new WalletTransferRequestDTO(1L, 2L, 200.0);
@@ -69,7 +64,9 @@ class TransactionControllerTest {
         when(authValidator.getAuthContext(request)).thenReturn(auth);
         when(authValidator.isAuthorizedForWallet(auth, 1L)).thenReturn(true);
 
-        WalletTransactionResponseDTO response = new WalletTransactionResponseDTO("txn2", 200.0, "DEBIT", null, "Transfer", 800.0, 5000.0);
+        WalletTransactionResponseDTO response = new WalletTransactionResponseDTO(
+                "txn2", 200.0, "DEBIT", null, "Transfer", 800.0, 5000.0
+        );
         when(walletTransactionService.transferMoney(1L, 2L, 200.0)).thenReturn(response);
 
         var result = transactionController.transferMoney(dto, request);
@@ -78,7 +75,6 @@ class TransactionControllerTest {
         assertEquals("txn2", result.getBody().transactionId());
     }
 
-    // ------------------ 3. listTransactions ------------------
     @Test
     void testListTransactions() {
         Long walletId = 1L;
@@ -98,7 +94,6 @@ class TransactionControllerTest {
         assertEquals(1, result.getBody().size());
     }
 
-    // ------------------ 4. getTransactionHistory ------------------
     @Test
     void testGetTransactionHistory() {
         Long walletId = 1L;
@@ -110,7 +105,7 @@ class TransactionControllerTest {
                 new WalletTransactionResponseDTO("txn1", 100.0, "CREDIT", null, "desc", 1000.0, 5000.0)
         ));
 
-        when(transactionService.getFilteredTransactions(eq(walletId), eq(null), any(), any(), any(Pageable.class)))
+        when(walletTransactionService.getFilteredTransactions(eq(walletId), eq(null), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         var result = transactionController.getTransactionHistory(walletId, null, null, null, 0, 10, request);
@@ -119,10 +114,8 @@ class TransactionControllerTest {
         assertEquals(1, result.getBody().getContent().size());
     }
 
-    // ------------------ 5. getAllUserTransactions ------------------
     @Test
     void testGetAllUserTransactions() {
-        AuthContext auth = new AuthContext("TOKEN", 1L, false);
         when(authValidator.extractToken(request)).thenReturn("TOKEN");
         when(authValidator.extractUserId("TOKEN")).thenReturn(1L);
 
@@ -130,7 +123,7 @@ class TransactionControllerTest {
                 new WalletTransactionResponseDTO("txn1", 50.0, "CREDIT", null, "desc", 500.0, 1000.0)
         ));
 
-        when(transactionService.getAllUserTransactions(1L, PageRequest.of(0, 10))).thenReturn(page);
+        when(walletTransactionService.getAllUserTransactions(1L, PageRequest.of(0, 10))).thenReturn(page);
 
         var result = transactionController.getAllUserTransactions(PageRequest.of(0,10), request);
 

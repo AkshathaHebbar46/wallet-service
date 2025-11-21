@@ -72,18 +72,6 @@ class WalletRepositoryTest {
     }
 
     @Test
-    @DisplayName("Should find wallets with balance greater than amount")
-    void testFindByBalanceGreaterThan() {
-        when(walletRepository.findByBalanceGreaterThan(500.0))
-                .thenReturn(List.of(wallet1));
-
-        List<WalletEntity> result = walletRepository.findByBalanceGreaterThan(500.0);
-
-        assertEquals(1, result.size());
-        assertTrue(result.get(0).getBalance() > 500.0);
-    }
-
-    @Test
     @DisplayName("Should find wallets created before given date")
     void testFindByCreatedAtBefore() {
         LocalDateTime date = LocalDateTime.now().minusDays(2);

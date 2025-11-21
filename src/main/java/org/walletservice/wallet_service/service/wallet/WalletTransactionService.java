@@ -2,6 +2,7 @@ package org.walletservice.wallet_service.service.wallet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -12,11 +13,13 @@ import org.walletservice.wallet_service.dto.response.WalletTransactionResponseDT
 import org.walletservice.wallet_service.entity.transaction.TransactionEntity;
 import org.walletservice.wallet_service.entity.transaction.TransactionType;
 import org.walletservice.wallet_service.entity.wallet.WalletEntity;
-import org.walletservice.wallet_service.repository.transaction.TransactionRepository;
+import org.walletservice.wallet_service.mapper.WalletTransactionMapper;
 import org.walletservice.wallet_service.repository.wallet.WalletRepository;
+import org.walletservice.wallet_service.service.transaction.TransactionService;
 import org.walletservice.wallet_service.validation.validator.WalletInternalValidationService;
-
+import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,18 +32,24 @@ public class WalletTransactionService {
     private static final int MAX_RETRY = 3;
 
     private final WalletRepository walletRepository;
-    private final TransactionRepository transactionRepository;
     private final WalletValidationService walletValidationService;
     private final WalletInternalValidationService walletInternalValidationService;
+    private final TransactionService transactionService;
+    private final WalletTransactionMapper mapper;
+    private final WalletService walletService;
 
     public WalletTransactionService(WalletRepository walletRepository,
-                                    TransactionRepository transactionRepository,
+                                    TransactionService transactionService,
                                     WalletValidationService walletValidationService,
-                                    WalletInternalValidationService walletInternalValidationService) {
+                                    WalletInternalValidationService walletInternalValidationService,
+                                    WalletTransactionMapper mapper,
+                                    WalletService walletService) {
         this.walletRepository = walletRepository;
-        this.transactionRepository = transactionRepository;
+        this.transactionService = transactionService;
         this.walletValidationService = walletValidationService;
         this.walletInternalValidationService = walletInternalValidationService;
+        this.mapper = mapper;
+        this.walletService = walletService;
     }
 
     private Long getAuthenticatedUserId() {
@@ -56,40 +65,32 @@ public class WalletTransactionService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
-
     public WalletTransactionResponseDTO processTransaction(Long walletId, WalletTransactionRequestDTO request) {
-        // 0️⃣ Idempotency check before any transaction
-        Optional<TransactionEntity> existing = transactionRepository.findByTransactionId(request.transactionId());
+
+        Optional<TransactionEntity> existing = transactionService.findByTransactionId(request.transactionId());
         if (existing.isPresent()) {
             TransactionEntity txn = existing.get();
             log.info("Idempotent request detected for transactionId={}", request.transactionId());
-            // Fetch the wallet to get current balance and daily limit
-            WalletEntity wallet = walletRepository.findById(walletId)
-                    .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+            WalletEntity wallet = walletService.getWalletById(walletId);
 
             double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
-            return new WalletTransactionResponseDTO(
-                    txn.getTransactionId(),
-                    txn.getAmount(),
-                    txn.getType().name(),
-                    txn.getTransactionDate(),
-                    txn.getDescription(),
+
+            return mapper.toDTO(
+                    txn,
                     wallet.getBalance(),
                     availableDailyLimit
             );
+
         }
+
         int attempts = 0;
         while (attempts < MAX_RETRY) {
             try {
-                // Validations outside transaction
                 WalletEntity wallet = validateTransaction(walletId, request);
-
-                // Transactional processing
                 return processTransactionTransactional(wallet, request);
-
             } catch (Exception ex) {
                 attempts++;
-                log.warn("Attempt {} failed for wallet {}: {}", attempts, walletId, ex.getMessage());
                 if (attempts >= MAX_RETRY) throw ex;
             }
         }
@@ -98,16 +99,13 @@ public class WalletTransactionService {
 
     public WalletTransactionResponseDTO transferMoney(Long fromWalletId, Long toWalletId, Double amount) {
         int attempts = 0;
+
         while (attempts < MAX_RETRY) {
             try {
                 WalletEntity[] wallets = validateTransfer(fromWalletId, toWalletId, amount);
-
-                // Calls another method that runs inside a transaction
                 return transferMoneyTransactional(wallets[0], wallets[1], amount);
-
             } catch (Exception ex) {
                 attempts++;
-                log.warn("Attempt {} failed to transfer from {} to {}: {}", attempts, fromWalletId, toWalletId, ex.getMessage());
                 if (attempts >= MAX_RETRY) throw ex;
             }
         }
@@ -115,10 +113,10 @@ public class WalletTransactionService {
     }
 
     private WalletEntity validateTransaction(Long walletId, WalletTransactionRequestDTO request) {
-        WalletEntity wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+        WalletEntity wallet = walletService.getWalletById(walletId);
 
         Long userId = getAuthenticatedUserId();
+
         if (!wallet.getUserId().equals(userId) && !isAdmin()) {
             throw new SecurityException("Forbidden: Wallet does not belong to you");
         }
@@ -141,11 +139,10 @@ public class WalletTransactionService {
         if (amount == null || amount <= 0)
             throw new IllegalArgumentException("Amount must be positive.");
 
-        // Validate source wallet (user-owned)
-        WalletEntity from = walletRepository.findById(fromWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Source wallet not found"));
+        WalletEntity from = walletService.getWalletById(fromWalletId);
 
         Long userId = getAuthenticatedUserId();
+
         if (!from.getUserId().equals(userId) && !isAdmin()) {
             throw new SecurityException("Forbidden: Cannot transfer from wallet you do not own");
         }
@@ -153,25 +150,20 @@ public class WalletTransactionService {
         walletValidationService.validateWalletState(from);
         walletValidationService.validateBalance(from, amount);
 
-        // Destination wallet: only fetch, no user-level validation
-        WalletEntity to = walletRepository.findById(toWalletId)
-                .orElseThrow(() -> new IllegalArgumentException("Destination wallet not found"));
+        WalletEntity to = walletService.getWalletById(toWalletId);
 
-        // Internal server validation (system token or internal method)
-        // calling WalletInternalValidationService
         walletInternalValidationService.validateReceiverWallet(toWalletId);
 
         return new WalletEntity[]{from, to};
     }
 
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     protected WalletTransactionResponseDTO processTransactionTransactional(WalletEntity wallet, WalletTransactionRequestDTO request) {
+
         double amount = request.amount();
         TransactionType type = TransactionType.valueOf(request.type().toUpperCase());
 
         if (type == TransactionType.DEBIT) {
-            //  Update spent & freeze inside transaction
             walletValidationService.updateDailySpentAndFreeze(wallet, amount);
             wallet.setBalance(wallet.getBalance() - amount);
         } else {
@@ -182,18 +174,13 @@ public class WalletTransactionService {
 
         TransactionEntity txn = new TransactionEntity(wallet.getId(), type, amount, request.description());
         txn.setTransactionId(request.transactionId() != null ? request.transactionId() : UUID.randomUUID().toString());
-        transactionRepository.save(txn);
+
+        transactionService.save(txn);
 
         double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
 
-        log.info("Transaction {} completed", txn.getTransactionId());
-
-        return new WalletTransactionResponseDTO(
-                txn.getTransactionId(),
-                txn.getAmount(),
-                type.name(),
-                txn.getTransactionDate(),
-                txn.getDescription(),
+        return mapper.toDTO(
+                txn,
                 wallet.getBalance(),
                 availableDailyLimit
         );
@@ -201,7 +188,7 @@ public class WalletTransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     protected WalletTransactionResponseDTO transferMoneyTransactional(WalletEntity from, WalletEntity to, Double amount) {
-        // Update spent & freeze inside transaction
+
         walletValidationService.updateDailySpentAndFreeze(from, amount);
 
         from.setBalance(from.getBalance() - amount);
@@ -215,23 +202,17 @@ public class WalletTransactionService {
         TransactionEntity debit = new TransactionEntity(from.getId(), TransactionType.DEBIT, amount,
                 "Transfer to wallet " + to.getId());
         debit.setTransactionId(txnId + "-D");
-        transactionRepository.save(debit);
+        transactionService.save(debit);
 
         TransactionEntity credit = new TransactionEntity(to.getId(), TransactionType.CREDIT, amount,
                 "Transfer from wallet " + from.getId());
         credit.setTransactionId(txnId + "-C");
-        transactionRepository.save(credit);
-
-        log.info("Transfer {} completed successfully", txnId);
+        transactionService.save(credit);
 
         double availableDailyLimit = walletValidationService.getRemainingDailyLimit(from);
 
-        return new WalletTransactionResponseDTO(
-                debit.getTransactionId(),
-                debit.getAmount(),
-                debit.getType().name(),
-                debit.getTransactionDate(),
-                debit.getDescription(),
+        return mapper.toDTO(
+                debit,
                 from.getBalance(),
                 availableDailyLimit
         );
@@ -239,24 +220,24 @@ public class WalletTransactionService {
 
     @Transactional(readOnly = true)
     public List<WalletTransactionResponseDTO> listTransactions(Long walletId) {
+
         Long userId = getAuthenticatedUserId();
-        WalletEntity wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+        WalletEntity wallet = walletService.getWalletById(walletId);
 
         if (!wallet.getUserId().equals(userId) && !isAdmin()) {
             throw new SecurityException("Forbidden: Cannot view transactions of this wallet");
         }
+
         double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
 
-        return transactionRepository.findByWalletId(walletId).stream()
-                .map(tx -> new WalletTransactionResponseDTO(
-                        tx.getTransactionId(),
-                        tx.getAmount(),
-                        tx.getType().name(),
-                        tx.getTransactionDate(),
-                        tx.getDescription(),
+        return transactionService.findByWalletId(walletId)
+                .stream()
+                .map(tx -> mapper.toDTO(
+                        tx,
                         wallet.getBalance(),
-                        availableDailyLimit))
+                        availableDailyLimit
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -266,24 +247,65 @@ public class WalletTransactionService {
             throw new SecurityException("Forbidden: Only admin can view all transactions");
         }
 
-        return transactionRepository.findAll().stream()
-                .map(tx -> {
-                    WalletEntity wallet = walletRepository.findById(tx.getWalletId())
-                            .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+        return transactionService.findByWalletIdIn(
+                walletRepository.findAll().stream().map(WalletEntity::getId).toList(),
+                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE)
+        ).stream().map(tx -> {
 
-                    double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+            WalletEntity wallet = walletService.getWalletById(tx.getWalletId());
 
-                    return new WalletTransactionResponseDTO(
-                            tx.getTransactionId(),
-                            tx.getAmount(),
-                            tx.getType().name(),
-                            tx.getTransactionDate(),
-                            tx.getDescription(),
-                            wallet.getBalance(),
-                            availableDailyLimit
-                    );
-                })
-                .collect(Collectors.toList());
+            double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+
+            return mapper.toDTO(
+                    tx,
+                    wallet.getBalance(),
+                    availableDailyLimit
+            );
+
+        }).collect(Collectors.toList());
     }
+
+    // Get filtered transactions for a wallet
+    @Transactional(readOnly = true)
+    public Page<WalletTransactionResponseDTO> getFilteredTransactions(Long walletId,
+                                                                      TransactionType type,
+                                                                      LocalDateTime startDate,
+                                                                      LocalDateTime endDate,
+                                                                      Pageable pageable) {
+        WalletEntity wallet = walletService.getWalletById(walletId);
+
+        Page<TransactionEntity> transactions = transactionService.findFilteredTransactions(walletId, type, startDate, endDate, pageable);
+
+        double balance = wallet.getBalance();
+        double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+
+        return transactions.map(txn -> mapper.toDTO(txn, balance, availableDailyLimit));
+    }
+
+    // Get all transactions for a user
+    @Transactional(readOnly = true)
+    public Page<WalletTransactionResponseDTO> getAllUserTransactions(Long userId, Pageable pageable) {
+        List<WalletEntity> wallets = walletRepository.findByUserId(userId);
+        List<Long> walletIds = wallets.stream().map(WalletEntity::getId).toList();
+
+        if (walletIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        Page<TransactionEntity> transactions = transactionService.findByWalletIdIn(walletIds, pageable);
+
+        return transactions.map(txn -> {
+            WalletEntity wallet = wallets.stream()
+                    .filter(w -> w.getId().equals(txn.getWalletId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
+
+            double balance = wallet.getBalance();
+            double availableDailyLimit = walletValidationService.getRemainingDailyLimit(wallet);
+
+            return mapper.toDTO(txn, balance, availableDailyLimit);
+        });
+    }
+
 
 }

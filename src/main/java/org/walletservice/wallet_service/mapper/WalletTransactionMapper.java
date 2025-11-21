@@ -9,14 +9,16 @@ import org.walletservice.wallet_service.entity.transaction.TransactionEntity;
 @Mapper(componentModel = "spring")
 public interface WalletTransactionMapper {
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "walletId", ignore = true)
-    @Mapping(target = "transactionDate", expression = "java(java.time.LocalDateTime.now())")
     TransactionEntity toEntity(WalletTransactionRequestDTO dto);
 
-    @Mapping(source = "transactionDate", target = "timestamp")
-    @Mapping(target = "balance", ignore = true)
-    @Mapping(target = "availableDailyLimit", ignore = true)
-    WalletTransactionResponseDTO toDTO(TransactionEntity entity);
+    @Mapping(source = "entity.transactionId", target = "transactionId")
+    @Mapping(source = "entity.amount", target = "amount")
+    @Mapping(source = "entity.type", target = "type")
+    @Mapping(source = "entity.transactionDate", target = "timestamp")
+    @Mapping(source = "entity.description", target = "description")
+    WalletTransactionResponseDTO toDTO(
+            TransactionEntity entity,
+            double balance,
+            double availableDailyLimit
+    );
 }
-

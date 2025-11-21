@@ -14,13 +14,8 @@ import java.util.Optional;
 public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
 
     // Find all wallets belonging to a specific user
-    List<WalletEntity> findByUserId(Long userId);
+    List<WalletEntity> findByUserId(Long userId);   //check for index
     boolean existsByUserId(Long userId);
-
-    List<WalletEntity> findAllByUserId(Long userId);
-
-    // Find wallets with balance greater than a certain amount
-    List<WalletEntity> findByBalanceGreaterThan(Double amount);
 
     // Find wallets created before a certain date
     List<WalletEntity> findByCreatedAtBefore(java.time.LocalDateTime date);

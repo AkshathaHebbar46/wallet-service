@@ -45,15 +45,12 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             LocalDateTime endDate,
             Pageable pageable);
 
-    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM TransactionEntity t WHERE t.walletId = :walletId AND t.type = 'DEBIT' AND t.transactionDate BETWEEN :start AND :end")
-    double sumDebitsByWalletAndDate(Long walletId, LocalDateTime start, LocalDateTime end);
-
     @Query("""
-        SELECT t FROM TransactionEntity t
-        WHERE (:walletId IS NULL OR t.walletId = :walletId)
-          AND (:type IS NULL OR t.type = :type)
-          AND (:start IS NULL OR t.transactionDate >= :start)
-          AND (:end IS NULL OR t.transactionDate <= :end)
+    SELECT t FROM TransactionEntity t
+    WHERE t.walletId = :walletId
+      AND (:type IS NULL OR t.type = :type)
+      AND (:start IS NULL OR t.transactionDate >= :start)
+      AND (:end IS NULL OR t.transactionDate <= :end)
     """)
     Page<TransactionEntity> findFilteredTransactions(
             @Param("walletId") Long walletId,
@@ -62,5 +59,4 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
             @Param("end") LocalDateTime end,
             Pageable pageable
     );
-
 }

@@ -22,7 +22,6 @@ import org.walletservice.wallet_service.validation.validator.AuthValidator;
 import org.walletservice.wallet_service.service.wallet.WalletService;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
