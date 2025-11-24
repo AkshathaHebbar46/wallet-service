@@ -9,6 +9,8 @@ import org.walletservice.wallet_service.entity.transaction.TransactionEntity;
 @Mapper(componentModel = "spring")
 public interface WalletTransactionMapper {
 
+    @Mapping(target = "walletId", ignore = true)
+    @Mapping(target = "transactionDate", ignore = true)
     TransactionEntity toEntity(WalletTransactionRequestDTO dto);
 
     @Mapping(source = "entity.transactionId", target = "transactionId")

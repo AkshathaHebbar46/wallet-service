@@ -21,9 +21,6 @@ jwt:
   secret: MySuperSuperSecretKeyThatIsLongEnough1234
   expiration: 3600000
 
-user-service:
-  base-url: http://localhost:8081
-
 logging:
   level:
     org:

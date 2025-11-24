@@ -7,10 +7,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "transactions",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "transaction_id")
+        indexes = {
+                @Index(name = "idx_transaction_date", columnList = "transaction_date"),
+                @Index(name = "idx_wallet_date", columnList = "wallet_id, transaction_date")
         }
 )
+
 public class TransactionEntity {
 
     @Id
