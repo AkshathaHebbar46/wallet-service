@@ -3,7 +3,7 @@ package org.walletservice.wallet_service.service.jwt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.walletservice.wallet_service.util.JwtUtil;
+import org.common.utils.JwtUtil;
 
 /**
  * Service to handle JWT operations using JwtUtil:

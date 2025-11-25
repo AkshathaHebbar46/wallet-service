@@ -44,6 +44,8 @@ dependencies {
     // Swagger / OpenAPI
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.14'
 
+    implementation project(':common-utils')
+
     // MySQL
     runtimeOnly 'com.mysql:mysql-connector-j'
 
